@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FingerprintDeviceController extends Controller
@@ -98,6 +99,10 @@ class FingerprintDeviceController extends Controller
             return back()->with('error', 'Pilih sekolah untuk mesin ini lebih dulu, lalu aktifkan.');
         }
 
+        if (! $device->is_active && config('student_attendance.require_allowed_ips') && ! $device->hasIpRestriction()) {
+            return back()->with('error', 'Isi "Batasi IP pengirim" pada mesin ini lebih dulu, lalu aktifkan.');
+        }
+
         $device->update(['is_active' => ! $device->is_active]);
         AdminAuditLog::record('fingerprint.device_toggled', $request->user('admin'), $device, ['is_active' => $device->is_active]);
 
@@ -170,6 +175,12 @@ class FingerprintDeviceController extends Controller
         $data['is_active'] = $request->boolean('is_active');
         $data['school_id'] = $data['school_id'] ?? null;
         $data['allowed_ips'] = implode(', ', array_filter(array_map('trim', explode(',', (string) ($data['allowed_ips'] ?? ''))))) ?: null;
+
+        if ($data['is_active'] && $data['allowed_ips'] === null && config('student_attendance.require_allowed_ips')) {
+            throw ValidationException::withMessages([
+                'allowed_ips' => 'Mesin aktif wajib punya batas IP pengirim (IP/CIDR) agar log tidak bisa dipalsukan hanya dengan nomor seri.',
+            ]);
+        }
 
         if ($data['school_id']) {
             // Hanya sekolah dalam cakupan pengelola yang boleh dipilih.

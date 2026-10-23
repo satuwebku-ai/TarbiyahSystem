@@ -9,6 +9,7 @@ use App\Models\OrganizationalUnit;
 use App\Models\Role;
 use App\Models\UserUnitAccess;
 use App\Services\EmployeeAccess;
+use App\Services\OrganizationAccess;
 use App\Rules\AdminPasswordPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,6 +73,7 @@ class AdminController extends Controller implements HasMiddleware
         ]);
 
         $this->guardSuperAdminAssignment($request, $data['roles'] ?? []);
+        $this->guardUnitScopeInput($request, $data['unit_ids'] ?? []);
 
         $admin = Admin::create([
             'name'      => $data['name'],
@@ -120,6 +122,7 @@ class AdminController extends Controller implements HasMiddleware
         $roleIds  = $data['roles'] ?? [];
         $isActive = $request->boolean('is_active');
         $this->guardSuperAdminAssignment($request, $roleIds);
+        $this->guardUnitScopeInput($request, $data['unit_ids'] ?? []);
 
         // Cegah kehilangan akses: akun sendiri & super admin terakhir.
         if ($admin->is($request->user())) {
@@ -179,16 +182,33 @@ class AdminController extends Controller implements HasMiddleware
             return ['canSetUnits' => false, 'unitOptions' => [], 'unitSelected' => []];
         }
 
+        // Pengelola terbatas hanya melihat & memilih unit dalam cakupannya sendiri.
+        $visible = app(OrganizationAccess::class)->visibleUnitIds(request()->user());
+        $units = OrganizationalUnit::query()
+            ->when($visible !== null, fn ($q) => $q->whereIn('id', $visible))
+            ->get();
+
         $selected = $admin && $admin->exists
             ? UserUnitAccess::query()->where('model_type', Admin::class)->where('model_id', $admin->id)
+                ->when($visible !== null, fn ($q) => $q->whereIn('organizational_unit_id', $visible))
                 ->pluck('organizational_unit_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
         return [
             'canSetUnits' => true,
-            'unitOptions' => app(EmployeeAccess::class)->unitOptions(OrganizationalUnit::query()->get()),
+            'unitOptions' => app(EmployeeAccess::class)->unitOptions($units),
             'unitSelected' => $selected,
         ];
+    }
+
+    /** Cakupan unit yang dikirim harus ada di dalam cakupan pengelola sendiri (cegah eskalasi). */
+    private function guardUnitScopeInput(Request $request, array $unitIds): void
+    {
+        if (! $request->boolean('unit_scope_present') || ! $request->user()->can('organization.access.manage')) {
+            return;
+        }
+
+        app(OrganizationAccess::class)->assertWithinScope($request->user(), $this->cleanUnitIds($unitIds));
     }
 
     /**
@@ -201,20 +221,12 @@ class AdminController extends Controller implements HasMiddleware
             return;
         }
 
-        $unitIds = array_values(array_unique(array_map('intval', array_filter($unitIds, fn ($id) => $id !== null && $id !== ''))));
+        app(OrganizationAccess::class)->replaceScope($request->user(), $admin, $this->cleanUnitIds($unitIds));
+    }
 
-        DB::transaction(function () use ($request, $admin, $unitIds) {
-            UserUnitAccess::query()->where('model_type', Admin::class)->where('model_id', $admin->id)->delete();
-            foreach ($unitIds as $unitId) {
-                UserUnitAccess::create([
-                    'organizational_unit_id' => $unitId,
-                    'model_type' => Admin::class,
-                    'model_id' => $admin->id,
-                    'created_at' => now(),
-                ]);
-            }
-            AdminAuditLog::record('organization.access.updated', $request->user(), $admin, ['organizational_unit_ids' => $unitIds]);
-        });
+    private function cleanUnitIds(array $unitIds): array
+    {
+        return array_values(array_unique(array_map('intval', array_filter($unitIds, fn ($id) => $id !== null && $id !== ''))));
     }
 
     private function superAdminRoleId(): int
@@ -232,6 +244,7 @@ class AdminController extends Controller implements HasMiddleware
      * Role organisasi inti tidak boleh diberikan oleh admin biasa. Jika tidak,
      * akun dengan izin admins.create/update dapat menaikkan dirinya/orang lain
      * menjadi Pengurus Besar atau Komisaris dan memperluas cakupan akses.
+     * Role kustom yang memuat izin "akses semua unit" diperlakukan sama.
      */
     private function guardSuperAdminAssignment(Request $request, array $roleIds): void
     {
@@ -239,27 +252,43 @@ class AdminController extends Controller implements HasMiddleware
             return;
         }
 
-        $protectedRoles = Role::query()
-            ->where('guard_name', 'admin')
-            ->whereIn('name', ['super-admin', 'pengurus-besar', 'komisaris-wilayah', 'komisaris-daerah'])
+        $protectedRoles = $this->protectedRoleQuery()
             ->whereIn('id', array_map('intval', $roleIds))
             ->exists();
 
         abort_if($protectedRoles, 403, 'Hanya Super Admin yang dapat menetapkan role inti organisasi.');
     }
 
-    /** Non-super-admin tidak boleh mengubah/menghapus akun Super Admin. */
+    /**
+     * Non-super-admin tidak boleh mengubah/menghapus akun Super Admin maupun akun pemegang
+     * role inti organisasi (mengganti sandi/email = mengambil alih akun berhak luas).
+     */
     private function guardTarget(Admin $admin): void
     {
-        abort_if($admin->isSuperAdmin() && ! request()->user()->isSuperAdmin(), 403);
+        $actor = request()->user();
+        if ($actor->isSuperAdmin()) {
+            return;
+        }
+
+        abort_if($admin->isSuperAdmin() || $admin->hasProtectedRole(), 403);
+    }
+
+    /** Role yang tak boleh ditetapkan oleh non-super-admin: role inti + role dengan izin akses semua unit. */
+    private function protectedRoleQuery()
+    {
+        return Role::query()
+            ->where('guard_name', 'admin')
+            ->where(fn ($q) => $q
+                ->whereIn('name', Admin::PROTECTED_ROLES)
+                ->orWhereHas('permissions', fn ($p) => $p->where('name', 'organization.access.all')));
     }
 
     private function assignableRoles()
     {
         return Role::where('guard_name', 'admin')
-            ->when(! request()->user()->isSuperAdmin(), fn ($q) => $q->whereNotIn('name', [
-                'super-admin', 'pengurus-besar', 'komisaris-wilayah', 'komisaris-daerah',
-            ]))
+            ->when(! request()->user()->isSuperAdmin(), fn ($q) => $q->whereNotIn(
+                'id', $this->protectedRoleQuery()->select('id'),
+            ))
             ->orderBy('id')->get();
     }
 }

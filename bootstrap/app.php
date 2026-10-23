@@ -56,11 +56,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Guard default per host (admin/pegawai/pelajar) — global, jalan sebelum middleware route.
         $middleware->prepend(UseGuard::class);
 
-        // Di belakang reverse proxy/CDN (Cloudflare, nginx, dll.): isi TRUSTED_PROXIES di .env
-        // (IP dipisah koma, atau * bila proxy tak bisa disebut) agar $request->ip() berisi IP klien asli.
-        if ($proxies = env('TRUSTED_PROXIES')) {
-            $middleware->trustProxies(at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
-        }
+        // Proxy tepercaya dibaca dari config/trustedproxy.php (TRUSTED_PROXIES di .env); env() di sini
+        // bernilai null setelah config:cache sehingga pengaturannya diabaikan diam-diam.
+
         $middleware->alias([
             'admin.session' => EnforceAdminSessionTimeout::class,
             'pegawai.session' => EnforcePegawaiSession::class,

@@ -4,26 +4,36 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
-use App\Models\AdminAuditLog;
 use App\Models\OrganizationalUnit;
 use App\Models\UserUnitAccess;
+use App\Services\OrganizationAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class OrganizationAccessController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, OrganizationAccess $access): View
     {
+        $actor = $request->user('admin');
+        $visible = $access->visibleUnitIds($actor);
+
         $admins = Admin::query()->with('roles')->orderBy('name')->get(['id', 'name', 'username', 'email', 'is_active']);
+        // Pengelola yang bukan Super Admin tidak mengatur akun Super Admin / pemegang role inti.
+        if (! $actor->isSuperAdmin()) {
+            $admins = $admins->reject(fn (Admin $a) => $a->isSuperAdmin() || $a->hasProtectedRole())->values();
+        }
         $selected = $admins->firstWhere('id', $request->integer('admin_id')) ?? $admins->first();
-        $units = OrganizationalUnit::query()->with(['parent:id,name', 'type:id,name'])->orderBy('name')->get();
+        // Pengelola terbatas hanya melihat unit dalam cakupannya sendiri.
+        $units = OrganizationalUnit::query()
+            ->when($visible !== null, fn ($q) => $q->whereIn('id', $visible))
+            ->with(['parent:id,name', 'type:id,name'])->orderBy('name')->get();
         $unitIds = $selected
             ? UserUnitAccess::query()
                 ->where('model_type', Admin::class)
                 ->where('model_id', $selected->id)
+                ->when($visible !== null, fn ($q) => $q->whereIn('organizational_unit_id', $visible))
                 ->pluck('organizational_unit_id')
                 ->map(fn ($id) => (int) $id)
                 ->all()
@@ -57,7 +67,7 @@ class OrganizationAccessController extends Controller
         return view('admin.organization.access.index', compact('admins', 'selected', 'units', 'unitIds', 'descendants', 'unrestricted'));
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, OrganizationAccess $access): RedirectResponse
     {
         $data = $request->validate([
             'admin_id' => ['required', 'integer', Rule::exists('admins', 'id')],
@@ -66,27 +76,9 @@ class OrganizationAccessController extends Controller
         ]);
 
         $admin = Admin::query()->findOrFail($data['admin_id']);
-        $unitIds = array_values(array_unique(array_map('intval', $data['unit_ids'] ?? [])));
 
-        DB::transaction(function () use ($admin, $unitIds) {
-            UserUnitAccess::query()
-                ->where('model_type', Admin::class)
-                ->where('model_id', $admin->id)
-                ->delete();
-
-            foreach ($unitIds as $unitId) {
-                UserUnitAccess::create([
-                    'organizational_unit_id' => $unitId,
-                    'model_type' => Admin::class,
-                    'model_id' => $admin->id,
-                    'created_at' => now(),
-                ]);
-            }
-
-            AdminAuditLog::record('organization.access.updated', auth('admin')->user(), $admin, [
-                'organizational_unit_ids' => $unitIds,
-            ]);
-        });
+        // Menolak akun terlindungi (403) dan unit di luar cakupan pengelola (422); lalu menyimpan + audit.
+        $access->replaceScope($request->user('admin'), $admin, $data['unit_ids'] ?? []);
 
         return redirect()->route('admin.organization.access.index', ['admin_id' => $admin->id])
             ->with('success', 'Cakupan unit untuk akun pengelola berhasil diperbarui.');

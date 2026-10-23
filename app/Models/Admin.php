@@ -17,6 +17,18 @@ class Admin extends Authenticatable
 
     protected $hidden = ['password', 'remember_token'];
 
+    /**
+     * Role inti organisasi. Hanya Super Admin yang boleh menetapkan role ini ke akun mana pun
+     * dan mengubah/menghapus akun yang memegangnya.
+     */
+    public const PROTECTED_ROLES = ['super-admin', 'pengurus-besar', 'komisaris-wilayah', 'komisaris-daerah'];
+
+    /** Akun ini memegang salah satu role inti organisasi (termasuk Super Admin). */
+    public function hasProtectedRole(): bool
+    {
+        return $this->roles()->whereIn('name', self::PROTECTED_ROLES)->exists();
+    }
+
     /** Username selalu disimpan huruf kecil agar login tidak peka huruf besar/kecil. */
     protected function username(): \Illuminate\Database\Eloquent\Casts\Attribute
     {

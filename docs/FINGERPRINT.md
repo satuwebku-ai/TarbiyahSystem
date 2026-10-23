@@ -29,14 +29,18 @@ curl -X POST "http://localhost/iclock/cdata?SN=TEST001&table=ATTLOG&Stamp=1" \
 ## Keamanan endpoint `/iclock`
 Mesin ADMS hanya mengenali dirinya lewat nomor seri (SN), yang tidak rahasia. Lapisan yang tersedia:
 - **Aktivasi admin**: mesin tak dikenal hanya tercatat sebagai "Baru terdeteksi"; log baru diterima setelah diaktifkan.
-- **Batasi IP pengirim** (opsional, per mesin): di form mesin isi IP/CIDR dipisah koma, mis. `203.0.113.10, 10.0.0.0/24`.
-  Selain itu ditolak 403 dan tidak mengubah status "daring". Jangan dipakai bila IP internet sekolah berubah-ubah
-  (isi dulu IP-nya setelah dipastikan tetap), atau batasi di firewall/VPN.
+- **Batasi IP pengirim** (per mesin; WAJIB untuk mesin aktif di production): di form mesin isi IP/CIDR dipisah koma,
+  mis. `203.0.113.10, 10.0.0.0/24`. Selain itu ditolak 403 dan tidak mengubah status "daring". Mesin aktif tanpa batas
+  IP ditolak di production (`FINGERPRINT_REQUIRE_ALLOWED_IPS`, bawaan true di production, false di lingkungan lain);
+  log tetap tersimpan di mesin dan terkirim ulang setelah IP diisi. Bila IP internet sekolah berubah-ubah, pakai
+  firewall/VPN dan isi rentang CIDR-nya.
 - **Waktu wajar**: ketukan lebih baru dari sekarang + `FINGERPRINT_MAX_FUTURE_MINUTES` (10) atau lebih tua dari
   `FINGERPRINT_MAX_PUNCH_AGE_DAYS` (60) disimpan dengan hasil "Waktu ketukan tidak wajar" dan tidak menjadi absensi
   (biasanya tanda jam mesin salah). Ubah batasnya di `.env` bila mesin bisa offline lebih lama.
 - **Ukuran request**: lebih dari `FINGERPRINT_MAX_PUNCHES_PER_REQUEST` (1000) baris atau `FINGERPRINT_MAX_BODY_BYTES`
   (256 KB) dijawab 413 tanpa menyimpan apa pun; mesin akan mencoba lagi. Naikkan bila log mencatat 413 pada mesin sah.
-- **Di belakang proxy/CDN**: isi `TRUSTED_PROXIES` di `.env` (IP proxy dipisah koma, atau `*`) agar IP klien dan
-  throttle dihitung per mesin, bukan per proxy.
+- **Di belakang proxy/CDN**: isi `TRUSTED_PROXIES` di `.env` (IP/CIDR proxy dipisah koma; `*` hanya bila server tidak
+  bisa dijangkau langsung dari internet) agar IP klien dan throttle dihitung per mesin, bukan per proxy. Nilainya dibaca
+  dari `config/trustedproxy.php`, jadi tetap berlaku setelah `php artisan config:cache`. Pembatasan IP di atas hanya
+  bisa dipercaya bila IP ini benar.
 - Mesin umumnya hanya mendukung HTTP (port 80), jadi data tidak terenkripsi di jaringan: pakai pembatasan IP atau VPN.

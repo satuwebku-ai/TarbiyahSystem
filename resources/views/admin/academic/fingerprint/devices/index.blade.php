@@ -42,7 +42,9 @@
               </td>
               <td>
                 @if($device->isPending())<span class="badge badge-soft-warning">Baru terdeteksi</span>
-                @else<span class="badge {{ $device->is_active ? 'badge-soft-success' : 'badge-soft-secondary' }}">{{ $device->is_active ? 'Aktif' : 'Nonaktif' }}</span>@endif
+                @else<span class="badge {{ $device->is_active ? 'badge-soft-success' : 'badge-soft-secondary' }}">{{ $device->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                  @if($device->is_active && ! $device->hasIpRestriction())<div><span class="badge badge-soft-{{ $device->blockedForMissingIpRestriction() ? 'danger' : 'warning' }}">{{ $device->blockedForMissingIpRestriction() ? 'Ditolak: IP belum dibatasi' : 'IP belum dibatasi' }}</span></div>@endif
+                @endif
               </td>
               <td class="text-end text-nowrap">
                 @if($canManage)

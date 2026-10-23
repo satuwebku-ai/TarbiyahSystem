@@ -38,9 +38,9 @@
           <input id="location" name="location" value="{{ old('location', $device->location) }}" class="form-control" maxlength="160" placeholder="Mis. Gerbang utama">
         </div>
         <div class="col-12">
-          <label for="allowed_ips" class="form-label">Batasi IP pengirim <span class="text-muted">(opsional)</span></label>
+          <label for="allowed_ips" class="form-label">Batasi IP pengirim @if(config('student_attendance.require_allowed_ips'))<span class="text-danger">*</span>@else<span class="text-muted">(sangat disarankan)</span>@endif</label>
           <input id="allowed_ips" name="allowed_ips" value="{{ old('allowed_ips', $device->allowed_ips) }}" class="form-control @error('allowed_ips') is-invalid @enderror" maxlength="255" placeholder="Mis. 203.0.113.10, 10.0.0.0/24">
-          <div class="form-text">Hanya IP/CIDR ini yang boleh mengirim data untuk mesin ini (dipisah koma). Kosongkan bila IP internet sekolah berubah-ubah; salah isi membuat mesin ditolak (403).</div>
+          <div class="form-text">Hanya IP/CIDR ini yang boleh mengirim data untuk mesin ini (dipisah koma). @if(config('student_attendance.require_allowed_ips'))Wajib diisi untuk mesin aktif, karena nomor seri saja bukan rahasia dan tidak cukup untuk membuktikan data berasal dari mesin Anda. Gunakan IP publik tetap sekolah (atau CIDR-nya).@else Tanpa batas IP, siapa pun yang tahu nomor seri mesin dapat mengirim log palsu. Kosongkan hanya bila IP internet sekolah berubah-ubah.@endif Salah isi membuat mesin ditolak (403).</div>
         </div>
         <div class="col-12">
           <div class="form-check form-switch">

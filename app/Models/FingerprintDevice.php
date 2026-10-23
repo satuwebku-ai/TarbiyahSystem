@@ -62,6 +62,23 @@ class FingerprintDevice extends Model
         return $ip !== null && IpUtils::checkIp($ip, $allowed);
     }
 
+    /** Sudah ada daftar IP/CIDR yang membatasi pengirim data mesin ini. */
+    public function hasIpRestriction(): bool
+    {
+        return array_filter(array_map('trim', explode(',', (string) $this->allowed_ips))) !== [];
+    }
+
+    /**
+     * Mesin aktif tanpa batas IP ditolak bila config student_attendance.require_allowed_ips menyala.
+     * Mesin nonaktif/belum diklaim tetap boleh "mendaftar" supaya admin bisa melihat & mengaturnya.
+     */
+    public function blockedForMissingIpRestriction(): bool
+    {
+        return (bool) config('student_attendance.require_allowed_ips')
+            && $this->is_active
+            && ! $this->hasIpRestriction();
+    }
+
     public function acceptsLogs(): bool
     {
         return $this->is_active && $this->school_id !== null;

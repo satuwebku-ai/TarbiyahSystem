@@ -18,6 +18,15 @@ return [
         'auto_absent_time' => '10:00',
     ],
 
+    // Mesin aktif WAJIB punya daftar IP/CIDR (allowed_ips) agar log diterima. Tanpa ini siapa pun yang
+    // tahu nomor seri mesin (tertera di badan mesin) bisa menyuntik log absensi palsu lewat /iclock.
+    // Bawaan: aktif di production, mati di lingkungan lain. Atur FINGERPRINT_REQUIRE_ALLOWED_IPS=false
+    // hanya bila IP mesin tidak bisa dibatasi (dan terima risikonya).
+    'require_allowed_ips' => filter_var(
+        env('FINGERPRINT_REQUIRE_ALLOWED_IPS', env('APP_ENV') === 'production'),
+        FILTER_VALIDATE_BOOLEAN,
+    ),
+
     // Perangkat baru yang belum diklaim dibatasi agar endpoint tidak bisa dipakai membanjiri tabel.
     'max_pending_devices' => 20,
 

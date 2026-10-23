@@ -22,7 +22,8 @@ use Illuminate\Http\Response;
  *
  * Tanpa sesi/CSRF/cookie (bukan browser). Keamanan: hanya mesin yang sudah DIAKTIFKAN admin
  * dan dikaitkan ke sekolah yang datanya diterima; mesin tak dikenal hanya tercatat sebagai
- * "perangkat baru" tanpa menyimpan satu pun log.
+ * "perangkat baru" tanpa menyimpan satu pun log. Nomor seri bukan rahasia, jadi di production mesin
+ * aktif juga wajib punya daftar IP yang diizinkan (config student_attendance.require_allowed_ips).
  */
 class IclockController extends Controller
 {
@@ -159,6 +160,11 @@ class IclockController extends Controller
         // IP dibatasi: tolak sebelum menyentuh DB, jadi permintaan palsu tidak membuat mesin tampak daring.
         if ($device && ! $device->allowsIp($request->ip())) {
             throw new HttpResponseException($this->text('ERROR: IP tidak diizinkan', 403));
+        }
+
+        // Mesin aktif wajib dibatasi IP-nya (production): nomor seri saja bukan rahasia.
+        if ($device && $device->blockedForMissingIpRestriction()) {
+            throw new HttpResponseException($this->text('ERROR: IP mesin belum dibatasi (isi Batasi IP di panel)', 403));
         }
 
         if (! $device) {
