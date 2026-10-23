@@ -194,6 +194,40 @@ class AppSettingsTest extends TestCase
         $this->assertSame(131072, config('student_attendance.max_body_bytes'));
     }
 
+    public function test_login_ip_limits_are_saved_applied_and_validated(): void
+    {
+        $this->actingAs($this->settingsAdmin(), 'admin');
+
+        $this->put(route('admin.settings.update', 'keamanan'), ['login_ip_max_failures' => 2, 'login_ip_decay_seconds' => 30])
+            ->assertSessionHasErrors(['login_ip_max_failures', 'login_ip_decay_seconds']);
+        $this->assertSame(0, AppSetting::count());
+
+        $this->put(route('admin.settings.update', 'keamanan'), ['login_ip_max_failures' => 12, 'login_ip_decay_seconds' => 900])
+            ->assertSessionHas('success');
+
+        $this->app->make(AppSettings::class)->apply();
+        $this->assertSame(12, config('admin_security.login_ip_max_failures'));
+        $this->assertSame(900, config('admin_security.login_ip_decay_seconds'));
+        $this->get(route('admin.settings.index', ['tab' => 'keamanan']))->assertOk()->assertSee('Maksimum login gagal per IP');
+    }
+
+    public function test_saved_login_ip_limit_is_enforced_at_login(): void
+    {
+        \Illuminate\Support\Facades\Cache::flush();
+        $admin = $this->settingsAdmin();
+        $this->actingAs($admin, 'admin');
+        $this->put(route('admin.settings.update', 'keamanan'), ['login_ip_max_failures' => 3, 'login_ip_decay_seconds' => 600]);
+        $this->app->make(AppSettings::class)->apply();
+        $this->post(route('admin.logout'));
+
+        foreach (['x1', 'x2', 'x3'] as $name) {
+            $this->post(route('admin.login.store'), ['username' => $name, 'password' => 'salah']);
+        }
+        $this->post(route('admin.login.store'), ['username' => $admin->username, 'password' => 'Secure-Test-Password-2026!'])
+            ->assertSessionHasErrors('username');
+        $this->assertGuest('admin');
+    }
+
     // ---- rahasia -----------------------------------------------------------
 
     public function test_smtp_password_is_encrypted_never_shown_never_logged_and_kept_when_left_blank(): void

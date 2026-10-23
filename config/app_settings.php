@@ -112,5 +112,22 @@ return [
                 ],
             ],
         ],
+
+        'keamanan' => [
+            'label' => 'Keamanan',
+            'description' => 'Pembatasan percobaan login gagal per alamat IP (semua username digabung) di portal pengelola, pegawai, dan pelajar.',
+            'fields' => [
+                'login_ip_max_failures' => [
+                    'label' => 'Maksimum login gagal per IP', 'type' => 'number', 'config' => ['admin_security.login_ip_max_failures'],
+                    'rules' => ['required', 'integer', 'between:3,1000'],
+                    'help' => 'Jangan terlalu kecil: satu IP sekolah (NAT) dipakai banyak pengguna sekaligus, sehingga satu kelas yang salah ketik password bisa memblokir semuanya.',
+                ],
+                'login_ip_decay_seconds' => [
+                    'label' => 'Lama blokir / jendela hitung (detik)', 'type' => 'number', 'config' => ['admin_security.login_ip_decay_seconds'],
+                    'rules' => ['required', 'integer', 'between:60,86400'],
+                    'help' => 'Hitungan gagal per IP direset setelah selang waktu ini. Minimum 60 detik.',
+                ],
+            ],
+        ],
     ],
 ];
