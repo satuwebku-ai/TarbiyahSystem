@@ -59,6 +59,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Proxy tepercaya dibaca dari config/trustedproxy.php (TRUSTED_PROXIES di .env); env() di sini
         // bernilai null setelah config:cache sehingga pengaturannya diabaikan diam-diam.
 
+        // Ganti/reset password (juga oleh admin lain) otomatis mengakhiri sesi lain akun itu:
+        // sesi menyimpan hash password dan dicek di tiap request. Memakai guard default dari UseGuard.
+        $middleware->web(append: [\Illuminate\Session\Middleware\AuthenticateSession::class]);
+
         $middleware->alias([
             'admin.session' => EnforceAdminSessionTimeout::class,
             'pegawai.session' => EnforcePegawaiSession::class,

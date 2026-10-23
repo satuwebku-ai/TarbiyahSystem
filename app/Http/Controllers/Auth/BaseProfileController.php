@@ -51,6 +51,8 @@ abstract class BaseProfileController extends Controller
         ]);
 
         $request->user()->update(['password' => $data['password']]);
+        // Akhiri semua sesi lain (dan token "ingat saya") akun ini; sesi ini tetap masuk.
+        auth($this->guardName())->logoutOtherDevices($data['password']);
         if (in_array($this->guardName(), ['admin', 'pegawai'], true)) {
             AdminAuditLog::record('admin.password_changed', $request->user(), $request->user(), ['via' => $this->guardName()]);
         }

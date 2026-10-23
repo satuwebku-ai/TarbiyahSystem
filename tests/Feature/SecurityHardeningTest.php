@@ -10,6 +10,9 @@ use App\Models\OrganizationalUnitType;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\School;
+use App\Models\Student;
+use App\Models\StudentAccount;
+use Database\Seeders\PelajarSeeder;
 use App\Models\SchoolLevel;
 use App\Models\UserUnitAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -324,5 +327,89 @@ class SecurityHardeningTest extends TestCase
     {
         $this->assertStringNotContainsString("env('TRUSTED_PROXIES')", file_get_contents(base_path('bootstrap/app.php')));
         $this->assertArrayHasKey('proxies', require config_path('trustedproxy.php'));
+    }
+
+    // ---- opsi 2: seeder demo, sesi lain, registrasi pelajar --------------
+
+    public function test_demo_student_seeder_is_skipped_in_production(): void
+    {
+        $this->app['env'] = 'production';
+        (new PelajarSeeder)->run();
+        $this->assertSame(0, StudentAccount::count());
+
+        $this->app['env'] = 'testing';
+        (new PelajarSeeder)->run();
+        $this->assertSame(1, StudentAccount::count());
+    }
+
+    public function test_password_change_by_someone_else_ends_other_sessions(): void
+    {
+        $admin = $this->makeAdmin(['dashboard.view']);
+        $this->actingAs($admin, 'admin');
+        $this->get(route('admin.dashboard'))->assertOk();
+
+        // Password diganti dari perangkat lain / oleh admin lain: sesi ini harus berakhir.
+        $admin->update(['password' => 'Another-Secure-Pass-2026!']);
+        $this->get(route('admin.dashboard'))->assertRedirect(route('admin.login'));
+    }
+
+    public function test_own_password_change_keeps_this_session_but_ends_the_rest(): void
+    {
+        $admin = $this->makeAdmin(['dashboard.view']);
+        $this->actingAs($admin, 'admin');
+        $this->get(route('admin.dashboard'))->assertOk();
+
+        $new = 'Another-Secure-Pass-2026!';
+        $this->put(route('admin.profile.password'), ['current_password' => self::PASSWORD, 'password' => $new, 'password_confirmation' => $new])
+            ->assertSessionHasNoErrors();
+
+        $this->get(route('admin.dashboard'))->assertOk();
+        $this->assertTrue(\Hash::check($new, $admin->fresh()->password));
+    }
+
+    private function registrationStudent(array $attrs = []): Student
+    {
+        $unit = OrganizationalUnit::query()->where('code', 'A1')->first();
+        $school = School::query()->first() ?? School::query()->create([
+            'organizational_unit_id' => $unit->id,
+            'school_level_id' => SchoolLevel::query()->create(['name' => 'SD', 'slug' => 'sd', 'sort_order' => 1, 'is_active' => true])->id,
+            'status' => 'active',
+        ]);
+
+        return Student::query()->create($attrs + ['school_id' => $school->id, 'nis' => 'NIS-777', 'name' => 'Siti Data', 'status' => 'active']);
+    }
+
+    private function register(string $nis, string $name = 'Nama Lain')
+    {
+        config(['domains.pelajar_registration' => true]);
+
+        return $this->post(route('pelajar.register.store'), [
+            'name' => $name, 'nis' => $nis, 'password' => 'Pelajar123x', 'password_confirmation' => 'Pelajar123x',
+        ]);
+    }
+
+    public function test_registration_requires_a_matching_active_student_and_links_the_account(): void
+    {
+        $student = $this->registrationStudent();
+
+        $this->register('NIS-000')->assertSessionHasErrors('nis');
+        $this->assertSame(0, StudentAccount::count());
+
+        $this->register('NIS-777')->assertSessionHasNoErrors()->assertRedirect(route('pelajar.dashboard'));
+        $account = StudentAccount::where('nis', 'NIS-777')->firstOrFail();
+        $this->assertSame($account->id, $student->fresh()->student_account_id);
+        $this->assertSame('Siti Data', $account->name);   // nama dari data sekolah, bukan isian formulir
+    }
+
+    public function test_registration_is_refused_for_inactive_or_already_linked_students(): void
+    {
+        $this->registrationStudent(['nis' => 'NIS-LULUS', 'status' => 'graduated']);
+        $taken = StudentAccount::create(['name' => 'Pemilik', 'nis' => 'NIS-777', 'password' => 'Pelajar123x', 'is_active' => true]);
+        $this->registrationStudent(['student_account_id' => $taken->id]);
+
+        $this->register('NIS-LULUS')->assertSessionHasErrors('nis');
+        $this->post(route('pelajar.logout'));
+        $this->register('NIS-777')->assertSessionHasErrors('nis');
+        $this->assertSame(1, StudentAccount::count());
     }
 }

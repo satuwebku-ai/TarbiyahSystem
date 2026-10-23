@@ -11,6 +11,13 @@ class PelajarSeeder extends Seeder
 {
     public function run(): void
     {
+        // Password demo tertulis di kode: jangan pernah membuat akun ini di produksi.
+        if (app()->environment('production')) {
+            $this->command?->warn('PelajarSeeder dilewati di production (akun demo dengan password tertulis di kode).');
+
+            return;
+        }
+
         $account = StudentAccount::firstOrCreate(
             ['nis' => '1234567890'],
             ['name' => 'Pelajar Demo', 'email' => 'pelajar.demo@example.test', 'password' => 'Pelajar#2026Demo', 'is_active' => true],

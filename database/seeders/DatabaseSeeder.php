@@ -11,7 +11,11 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RbacSeeder::class,    // permission + role
             AdminSeeder::class,   // Super Admin (dari .env)
-            PelajarSeeder::class, // pelajar demo (local saja)
         ]);
+
+        // Akun demo (password tertulis di kode): bukan untuk production.
+        if (! app()->environment('production')) {
+            $this->call(PelajarSeeder::class);
+        }
     }
 }
