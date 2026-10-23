@@ -14,6 +14,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\Student;
+use Database\Seeders\AkunContohSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\JenisPegawaiSeeder;
 use Database\Seeders\JenisUnitSeeder;
@@ -167,6 +168,25 @@ class SeederTest extends TestCase
         $this->assertSame(138, Employee::count());
         $this->assertSame(360, Student::count());
         $this->assertSame(1, Admin::count());
+    }
+
+    public function test_example_pegawai_and_pelajar_accounts_can_log_in(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $this->post(route('pegawai.login.store'), ['username' => AkunContohSeeder::PEGAWAI_USERNAME, 'password' => AkunContohSeeder::PASSWORD]);
+        $this->assertAuthenticated('pegawai');
+        $this->get(route('pegawai.dashboard'))->assertOk();
+        $this->assertSame(1, Employee::whereNotNull('user_id')->count());
+
+        $this->post(route('pelajar.login.store'), ['nis' => AkunContohSeeder::PELAJAR_NIS, 'password' => AkunContohSeeder::PASSWORD]);
+        $this->assertAuthenticated('pelajar');
+        $this->get(route('pelajar.dashboard'))->assertOk();
+        $this->assertSame(1, Student::whereNotNull('student_account_id')->count());
+
+        $this->seed(AkunContohSeeder::class);
+        $this->assertSame(1, \App\Models\User::count());
+        $this->assertSame(1, \App\Models\StudentAccount::count());
     }
 
     public function test_assignment_seeder_runs_the_prerequisite_seeders_and_is_repeatable(): void

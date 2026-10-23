@@ -10,7 +10,7 @@ use Illuminate\Database\Seeder;
  *   php artisan db:seed --class=SiswaSeeder     -> hanya data siswa (beserta prasyaratnya)
  *
  * Data referensi (aman untuk production, dijalankan berulang): Rbac, Super Admin, Jenis Unit, Jenis Pegawai, Jenjang.
- * Data contoh fiktif (dilewati di production): Unit, Jabatan, Sekolah, Pegawai, Penugasan, Siswa.
+ * Data contoh fiktif (dilewati di production): Unit, Jabatan, Sekolah, Pegawai, Penugasan, Siswa, Akun Contoh.
  */
 class DatabaseSeeder extends Seeder
 {
@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             PegawaiSeeder::class,        // 2. data pegawai
             PenugasanSeeder::class,      // 9. penugasan
             SiswaSeeder::class,          // 3. data siswa
+            AkunContohSeeder::class,     //    1 akun login contoh: pegawai dan pelajar
         ]);
     }
 }
