@@ -98,6 +98,7 @@ return [
                 ['label' => 'Kebijakan Keamanan', 'route' => 'admin.security.index', 'active' => 'admin.security.index', 'can' => 'security.view'],
                 ['label' => 'Riwayat Keamanan', 'route' => 'admin.security.activity', 'active' => 'admin.security.activity', 'can' => 'security.activity'],
             ]],
+            ['label' => 'Pengaturan Aplikasi', 'icon' => 'bolt', 'route' => 'admin.settings.index', 'active' => 'admin.settings.*', 'can' => 'settings.view'],
         ],
     ],
     [

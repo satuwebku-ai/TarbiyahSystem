@@ -78,6 +78,10 @@ return [
             'security.update' => 'Ubah kebijakan keamanan',
             'security.activity' => 'Lihat riwayat keamanan',
         ],
+        'Pengaturan Aplikasi' => [
+            'settings.view' => 'Lihat pengaturan aplikasi',
+            'settings.update' => 'Ubah pengaturan aplikasi (email, pendaftaran, fingerprint)',
+        ],
     ],
 
     // Akun pegawai/guru (tabel users) memakai portal pegawai.<domain>.

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Admin\AppSettingsController;
 use App\Http\Controllers\Admin\AttendanceCorrectionController;
 use App\Http\Controllers\Admin\AttendanceEntryController;
 use App\Http\Controllers\Admin\AttendanceHolidayController;
@@ -76,6 +77,13 @@ Route::middleware(['auth', 'admin.session'])->group(function () {
         ->middleware('can:security.update')->name('security.update');
     Route::get('security/activity', [SecuritySettingsController::class, 'activity'])
         ->middleware('can:security.activity')->name('security.activity');
+
+    Route::get('settings', [AppSettingsController::class, 'index'])
+        ->middleware('can:settings.view')->name('settings.index');
+    Route::put('settings/{group}', [AppSettingsController::class, 'update'])
+        ->middleware('can:settings.update')->name('settings.update');
+    Route::post('settings/email/test', [AppSettingsController::class, 'testMail'])
+        ->middleware(['can:settings.update', 'throttle:5,1'])->name('settings.test-mail');
 
     Route::resource('roles', RoleController::class)->except('show');
     Route::resource('admins', AdminController::class)->except('show');

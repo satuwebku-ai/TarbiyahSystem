@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\View;
+use App\Services\AppSettings;
 use App\Services\OrganizationSetup;
 use Illuminate\Support\ServiceProvider;
 
@@ -18,11 +19,14 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(AppSettings::class);
     }
 
     public function boot(): void
     {
+        // Pengaturan dari menu Pengaturan Aplikasi (tabel app_settings) menimpa nilai .env/config. Aman bila tabel belum ada.
+        $this->app->make(AppSettings::class)->apply();
+
         // Paginasi memakai markup Bootstrap 5 (default Laravel = Tailwind, SVG-nya jadi raksasa tanpa Tailwind).
         Paginator::useBootstrapFive();
 
