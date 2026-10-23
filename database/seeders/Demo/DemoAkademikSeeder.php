@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Seeders;
+namespace Database\Seeders\Demo;
 
 use App\Models\AcademicYear;
 use App\Models\Classroom;
@@ -9,28 +9,25 @@ use App\Models\Student;
 use App\Models\StudentClassPlacement;
 use App\Models\StudentEnrollment;
 use App\Models\StudentGuardian;
-use Database\Seeders\Concerns\YayasanDataset;
+use Database\Seeders\PelajarSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /** Kelas, pelajar, wali, pendaftaran tahun ajaran, dan penempatan kelas untuk setiap sekolah. */
-class YayasanAkademikSeeder extends Seeder
+class DemoAkademikSeeder extends Seeder
 {
-    use YayasanDataset;
-
-    /** Jumlah pelajar per kelas contoh. */
-    private const PER_CLASS = 10;
+    use DemoDataset;
 
     public function run(): void
     {
         if (! $this->guardProduction()) {
             return;
         }
-        $this->call(YayasanSekolahSeeder::class);
+        $this->ensure(School::exists(), DemoSekolahSeeder::class);
 
         DB::transaction(function () {
             foreach ($this->schoolSpecs() as $spec) {
-                $school = School::whereHas('unit', fn ($q) => $q->where('code', $spec['code']))->firstOrFail();
+                $school = School::whereHas('unit', fn ($q) => $q->where('code', $spec['code']))->with('unit.parent')->firstOrFail();
                 $year = AcademicYear::where('school_id', $school->id)->where('name', self::YEAR_NAME)->firstOrFail();
 
                 foreach ($this->levels()[$spec['level']][2] as $c => [$className, $grade, $age]) {
@@ -53,10 +50,13 @@ class YayasanAkademikSeeder extends Seeder
     {
         $seed = $schoolIdx * 1000 + $classIdx * 100 + $n;
         $gender = $n % 2 === 0 ? 'female' : 'male';
-        $nis = sprintf('%02d%d%03d', $schoolIdx, $classIdx + 1, $n);
+
+        // Pelajar pertama di sekolah pertama dipakai akun demo pelajar (NIS tetap, lihat PelajarSeeder).
+        $isDemoStudent = $schoolIdx === 1 && $classIdx === 0 && $n === 1;
+        $nis = $isDemoStudent ? PelajarSeeder::NIS : sprintf('%02d%d%03d', $schoolIdx, $classIdx + 1, $n);
 
         $student = Student::firstOrCreate(['school_id' => $school->id, 'nis' => $nis], [
-            'nisn' => sprintf('30%02d%d%04d', $schoolIdx, $classIdx + 1, $n),
+            'nisn' => sprintf('31%02d%d%04d', $schoolIdx, $classIdx + 1, $n),
             'name' => $this->personName($seed, $gender), 'gender' => $gender,
             'birth_place' => preg_replace('/^KOMDA\s+(Kabupaten|Kota)\s+/', '', (string) $school->unit->parent?->name) ?: 'Asal',
             'birth_date' => sprintf('%d-%02d-%02d', 2026 - $age, 1 + $seed % 12, 1 + $seed % 28),
@@ -73,10 +73,10 @@ class YayasanAkademikSeeder extends Seeder
         ]);
 
         $enrollment = StudentEnrollment::create([
-            'student_id' => $student->id, 'academic_year_id' => $year->id, 'enrollment_date' => '2026-07-13', 'status' => 'active',
+            'student_id' => $student->id, 'academic_year_id' => $year->id, 'enrollment_date' => self::YEAR_START, 'status' => 'active',
         ]);
         StudentClassPlacement::create([
-            'student_enrollment_id' => $enrollment->id, 'classroom_id' => $classroom->id, 'start_date' => '2026-07-13', 'status' => 'active',
+            'student_enrollment_id' => $enrollment->id, 'classroom_id' => $classroom->id, 'start_date' => self::YEAR_START, 'status' => 'active',
         ]);
     }
 }

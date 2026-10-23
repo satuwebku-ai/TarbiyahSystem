@@ -1,36 +1,34 @@
 <?php
 
-namespace Database\Seeders;
+namespace Database\Seeders\Demo;
 
 use App\Models\AcademicYear;
+use App\Models\AttendanceHoliday;
 use App\Models\AttendancePolicy;
 use App\Models\OrganizationalPosition;
 use App\Models\OrganizationalUnit;
 use App\Models\OrganizationalUnitType;
 use App\Models\School;
 use App\Models\SchoolLevel;
-use Database\Seeders\Concerns\YayasanDataset;
+use Database\Seeders\SchoolLevelSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-/** Jenjang SD/SMP/SMA, sekolah di setiap KOMDA, tahun ajaran, jabatan sekolah, dan jam kerja umum. */
-class YayasanSekolahSeeder extends Seeder
+/** Sekolah di setiap KOMDA, tahun ajaran, jabatan sekolah, jam kerja umum, dan hari libur contoh. */
+class DemoSekolahSeeder extends Seeder
 {
-    use YayasanDataset;
+    use DemoDataset;
 
     public function run(): void
     {
         if (! $this->guardProduction()) {
             return;
         }
-        $this->call(YayasanStrukturSeeder::class);
+        $this->ensure(OrganizationalUnit::where('code', self::PB_CODE)->exists(), DemoStrukturSeeder::class);
+        $this->ensure(SchoolLevel::where('slug', 'sma')->exists(), SchoolLevelSeeder::class);
 
         DB::transaction(function () {
-            $levels = [];
-            foreach ($this->levels() as $slug => [$name, $order]) {
-                $levels[$slug] = SchoolLevel::firstOrCreate(['slug' => $slug], ['name' => $name, 'sort_order' => $order, 'is_active' => true]);
-            }
-
+            $levels = SchoolLevel::all()->keyBy('slug');
             $typeId = OrganizationalUnitType::where('slug', 'sekolah')->value('id');
 
             foreach ($this->schoolSpecs() as $spec) {
@@ -53,7 +51,7 @@ class YayasanSekolahSeeder extends Seeder
 
                 AcademicYear::updateOrCreate(
                     ['school_id' => $school->id, 'name' => self::YEAR_NAME],
-                    ['start_date' => '2026-07-13', 'end_date' => '2027-06-26', 'is_active' => true],
+                    ['start_date' => self::YEAR_START, 'end_date' => self::YEAR_END, 'is_active' => true],
                 );
             }
 
@@ -63,6 +61,10 @@ class YayasanSekolahSeeder extends Seeder
                     'organizational_unit_id' => null, 'name' => 'Jam Kerja Yayasan', 'work_days' => [1, 2, 3, 4, 5],
                     'work_start' => '07:00', 'work_end' => '15:00', 'late_tolerance_minutes' => 15, 'is_active' => true,
                 ]);
+            }
+
+            foreach ($this->demoHolidays() as $date => $name) {
+                AttendanceHoliday::firstOrCreate(['holiday_date' => $date, 'name' => $name, 'organizational_unit_id' => null]);
             }
         });
 

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Daftar akun demo untuk tombol "login satu klik" di halaman login.
- * Hanya akun yang sudah ada di database (dibuat oleh DemoSeeder / YayasanSeeder + PelajarSeeder).
+ * Hanya akun yang sudah ada di database (dibuat oleh DemoSeeder).
  *
  * Tiap item: ['id', 'label', 'identifier', 'name', 'model'].
  */

@@ -1,22 +1,22 @@
 <?php
 
-namespace Database\Seeders;
+namespace Database\Seeders\Demo;
 
 use App\Models\OrganizationalAssignment;
 use App\Models\OrganizationalPosition;
 use App\Models\OrganizationalUnit;
 use App\Models\OrganizationalUnitType;
-use Database\Seeders\Concerns\YayasanDataset;
+use Database\Seeders\OrganizationTypeSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Pengurus Besar -> Komisaris Wilayah (KOMWIL, tingkat provinsi) -> Komisaris Daerah (KOMDA,
- * kabupaten/kota), lengkap dengan jabatan dan penugasan pengurusnya. Idempoten.
+ * Pengurus Besar -> Komisaris Wilayah (KOMWIL, provinsi) -> Komisaris Daerah (KOMDA, kabupaten/kota),
+ * lengkap dengan jabatan dan penugasan pengurusnya. Pengurus adalah pegawai (tenaga kependidikan). Idempoten.
  */
-class YayasanStrukturSeeder extends Seeder
+class DemoStrukturSeeder extends Seeder
 {
-    use YayasanDataset;
+    use DemoDataset;
 
     private int $seed = 0;
 
@@ -25,19 +25,12 @@ class YayasanStrukturSeeder extends Seeder
         if (! $this->guardProduction()) {
             return;
         }
+        $this->ensure(OrganizationalUnitType::where('slug', 'sekolah')->exists(), OrganizationTypeSeeder::class);
 
         DB::transaction(function () {
-            $types = [];
-            foreach ([
-                'pengurus-besar' => ['Pengurus Besar', 'Pimpinan tertinggi yayasan.'],
-                'komwil' => ['Komisaris Wilayah (KOMWIL)', 'Perwakilan yayasan setingkat provinsi.'],
-                'komda' => ['Komisaris Daerah (KOMDA)', 'Perwakilan yayasan setingkat kabupaten/kota.'],
-                'sekolah' => ['Sekolah', 'Satuan pendidikan (SD, SMP, SMA).'],
-            ] as $slug => [$name, $desc]) {
-                $types[$slug] = OrganizationalUnitType::firstOrCreate(['slug' => $slug], ['name' => $name, 'description' => $desc, 'is_active' => true]);
-            }
+            $types = OrganizationalUnitType::whereIn('slug', array_keys(OrganizationTypeSeeder::TYPES))->get()->keyBy('slug');
 
-            $pb = $this->unit(self::PB_CODE, $types['pengurus-besar']->id, null, 'Pengurus Besar Yayasan Pendidikan', 'Jl. Pendidikan No. 1, Jakarta');
+            $pb = $this->unit(self::PB_CODE, $types['pengurus-besar']->id, null, 'Pengurus Besar Yayasan Tarbiyah', 'Jl. Pendidikan No. 1, Jakarta');
             $this->staff($pb, ['Ketua Umum', 'Sekretaris Umum', 'Bendahara Umum', 'Ketua Bidang Pendidikan']);
 
             foreach ($this->provinces() as [$provCode, $provName, $komdas]) {
@@ -63,10 +56,7 @@ class YayasanStrukturSeeder extends Seeder
         );
     }
 
-    /**
-     * Buat jabatan dan isi setiap jabatan dengan satu pengurus. Pengurus adalah pegawai (Data Pegawai,
-     * tipe tenaga kependidikan) yang ditempatkan di unit itu, sehingga penugasan terhubung ke pegawai.
-     */
+    /** Buat jabatan lalu isi tiap jabatan dengan satu pengurus yang ditempatkan di unit itu. */
     private function staff(OrganizationalUnit $unit, array $positions): void
     {
         foreach ($positions as $i => $positionName) {
@@ -86,7 +76,6 @@ class YayasanStrukturSeeder extends Seeder
                 ['organizational_unit_id' => $unit->id, 'organizational_position_id' => $position->id, 'start_date' => '2026-01-01'],
                 ['employee_id' => $employee->id, 'assignee_name' => $employee->name, 'status' => 'active'],
             );
-            // Data contoh lama (nama manual) dihubungkan ke pegawai tanpa mengganti namanya.
             if (! $assignment->employee_id) {
                 $assignment->update(['employee_id' => $employee->id]);
             }

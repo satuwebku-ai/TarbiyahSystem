@@ -10,31 +10,29 @@ use App\Models\Role;
 use App\Models\UserUnitAccess;
 use App\Models\WorkActivity;
 use App\Models\WorkProgram;
-use Database\Seeders\PhaseSixDemoSeeder;
+use Database\Seeders\Demo\DemoProgramSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WorkProgramTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_local_phase_six_demo_seeder_is_repeatable(): void
+    public function test_demo_program_seeder_is_repeatable(): void
     {
-        $originalEnvironment = app()->environment();
-        app()->detectEnvironment(fn () => 'local');
+        $this->seed(DemoProgramSeeder::class);
+        $counts = fn () => [WorkProgram::count(), WorkActivity::count(), DB::table('activity_reports')->count(), DB::table('activity_approvals')->count()];
+        $first = $counts();
 
-        try {
-            $this->seed(PhaseSixDemoSeeder::class);
-            $this->seed(PhaseSixDemoSeeder::class);
-        } finally {
-            app()->detectEnvironment(fn () => $originalEnvironment);
+        $this->seed(DemoProgramSeeder::class);
+
+        $this->assertSame($first, $counts());
+        $this->assertSame(7, $first[0]);
+        $this->assertDatabaseHas('work_programs', ['code' => 'DEMO-PB-01', 'status' => 'approved']);
+        foreach (['approved', 'submitted', 'draft', 'rejected'] as $status) {
+            $this->assertTrue(WorkProgram::where('code', 'like', 'DEMO-KD-%')->where('status', $status)->exists(), $status);
         }
-
-        $this->assertDatabaseCount('work_programs', 2);
-        $this->assertDatabaseCount('work_activities', 2);
-        $this->assertDatabaseCount('activity_reports', 1);
-        $this->assertDatabaseHas('work_programs', ['code' => 'DEMO-2026-01', 'status' => 'approved']);
-        $this->assertDatabaseHas('work_programs', ['code' => 'DEMO-2026-02', 'status' => 'draft']);
     }
 
     public function test_unit_restricted_admin_cannot_open_another_units_program(): void

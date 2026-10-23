@@ -14,9 +14,9 @@ use App\Models\SchoolLevel;
 use App\Models\Student;
 use App\Models\StudentClassPlacement;
 use App\Models\UserUnitAccess;
-use Database\Seeders\FoundationOrganizationSeeder;
+use Database\Seeders\Demo\DemoAkademikSeeder;
+use Database\Seeders\OrganizationTypeSeeder;
 use Database\Seeders\PelajarSeeder;
-use Database\Seeders\PhaseSevenDemoSeeder;
 use Database\Seeders\SchoolLevelSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -25,43 +25,31 @@ class EducationAcademicTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_foundation_and_phase_seven_demo_seeders_are_repeatable(): void
+    public function test_reference_seeders_are_repeatable_and_demo_student_is_linked_to_its_account(): void
     {
-        $originalEnvironment = app()->environment();
-        app()->detectEnvironment(fn () => 'local');
+        $this->seed(OrganizationTypeSeeder::class);
+        $this->seed(OrganizationTypeSeeder::class);
+        $this->seed(SchoolLevelSeeder::class);
+        $this->seed(SchoolLevelSeeder::class);
+        $this->assertDatabaseCount('organizational_unit_types', 4);
+        $this->assertDatabaseCount('school_levels', 3);
 
-        try {
-            $this->seed(FoundationOrganizationSeeder::class);
-            $this->seed(SchoolLevelSeeder::class);
-            $this->seed(PelajarSeeder::class);
-            $this->seed(PhaseSevenDemoSeeder::class);
-            $this->seed(PhaseSevenDemoSeeder::class);
-        } finally {
-            app()->detectEnvironment(fn () => $originalEnvironment);
-        }
+        $this->seed(DemoAkademikSeeder::class);
+        $this->seed(PelajarSeeder::class);
+        $this->seed(PelajarSeeder::class);
 
-        $pb = OrganizationalUnit::query()->where('code', 'PB-YAYASAN')->firstOrFail();
-        $komwil = OrganizationalUnit::query()->where('code', 'KOMWIL-DEMO-PROV')->firstOrFail();
-        $this->assertSame($pb->id, $komwil->parent_id);
-        $this->assertDatabaseCount('schools', 1);
-        $this->assertDatabaseCount('academic_years', 1);
-        $this->assertDatabaseCount('classrooms', 1);
-        $this->assertDatabaseCount('students', 1);
-        $this->assertDatabaseCount('student_guardians', 1);
-        $this->assertDatabaseCount('student_class_placements', 1);
-        $this->assertDatabaseHas('organizational_units', [
-            'code' => 'KOMDA-DEMO-KAB',
-            'parent_id' => $komwil->id,
-        ]);
-        $this->assertDatabaseHas('organizational_units', [
-            'code' => 'SEKOLAH-DEMO-001',
-            'parent_id' => OrganizationalUnit::query()->where('code', 'KOMDA-DEMO-KAB')->value('id'),
-        ]);
+        $this->assertDatabaseCount('student_accounts', 1);
+        $student = Student::query()->where('nis', '1234567890')->firstOrFail();
+        $this->assertSame('1234567890', $student->account?->nis);
+        $this->assertSame(
+            OrganizationalUnit::query()->where('code', 'SD-SULTENG-PAL')->value('id'),
+            $student->school->organizational_unit_id,
+        );
     }
 
     public function test_super_admin_can_create_school_year_class_student_guardian_and_placement(): void
     {
-        $this->seed(FoundationOrganizationSeeder::class);
+        $this->seed(OrganizationTypeSeeder::class);
         $this->seed(SchoolLevelSeeder::class);
         $this->actingAs($this->createSuperAdmin(), 'admin');
         $this->get(route('admin.academic.schools.index'))->assertOk();
@@ -172,7 +160,7 @@ class EducationAcademicTest extends TestCase
 
     public function test_unit_restricted_admin_cannot_view_students_outside_assigned_komda(): void
     {
-        $this->seed(FoundationOrganizationSeeder::class);
+        $this->seed(OrganizationTypeSeeder::class);
         $this->seed(SchoolLevelSeeder::class);
         $assignedKomda = $this->createKomda('KOMDA-UJI-1');
         $otherKomda = $this->createKomda('KOMDA-UJI-2');
