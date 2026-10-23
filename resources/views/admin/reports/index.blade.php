@@ -13,7 +13,7 @@
     $cards = [];
     if (isset($summaries['employees'])) {
       $t = $summaries['employees']['totals'] ?? [];
-      $cards[] = ['employees', 'Pegawai & guru', $n($t['total'] ?? 0), $n($t['teacher'] ?? 0).' guru · '.$n($t['staff'] ?? 0).' staf', 'card-stat-blue'];
+      $cards[] = ['employees', 'Pegawai & guru', $n($t['total'] ?? 0), $n($t['teacher'] ?? 0).' guru · '.$n($t['staff'] ?? 0).' staf'.(max(0, ($t['total'] ?? 0) - ($t['teacher'] ?? 0) - ($t['staff'] ?? 0)) > 0 ? ' · '.$n(max(0, ($t['total'] ?? 0) - ($t['teacher'] ?? 0) - ($t['staff'] ?? 0))).' PB/lainnya' : ''), 'card-stat-blue'];
     }
     if (isset($summaries['employee-attendance'])) {
       $t = $summaries['employee-attendance']['totals'] ?? [];

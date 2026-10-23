@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RbacSeeder::class,              // permission + role
             SchoolLevelSeeder::class,       // jenjang SD/SMP/SMA
+            EmployeeTypeSeeder::class,      // jenis pegawai: guru, tenaga kependidikan, pegawai PB
             OrganizationTypeSeeder::class,  // tipe unit organisasi
             AdminSeeder::class,             // Super Admin (dari .env)
         ]);

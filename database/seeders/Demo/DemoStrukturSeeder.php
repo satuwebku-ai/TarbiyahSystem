@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Pengurus Besar -> Komisaris Wilayah (KOMWIL, provinsi) -> Komisaris Daerah (KOMDA, kabupaten/kota),
- * lengkap dengan jabatan dan penugasan pengurusnya. Pengurus adalah pegawai (tenaga kependidikan). Idempoten.
+ * lengkap dengan jabatan dan penugasan pengurusnya. Pengurus adalah pegawai berjenis Pegawai PB. Idempoten.
  */
 class DemoStrukturSeeder extends Seeder
 {
@@ -69,7 +69,7 @@ class DemoStrukturSeeder extends Seeder
             $employee = $this->seedEmployee(
                 sprintf('PGS-%s-%d', $unit->code, $i + 1),
                 $this->personName($this->seed + 100, $gender),
-                'staff', $unit, $position, $positionName, $this->seed + 100,
+                'pb', $unit, $position, $positionName, $this->seed + 100,
             );
 
             $assignment = OrganizationalAssignment::firstOrCreate(

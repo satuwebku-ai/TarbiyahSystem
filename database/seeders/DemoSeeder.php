@@ -39,6 +39,7 @@ class DemoSeeder extends Seeder
         $this->call([
             RbacSeeder::class,
             SchoolLevelSeeder::class,
+            EmployeeTypeSeeder::class,
             OrganizationTypeSeeder::class,
             DemoStrukturSeeder::class,
             DemoSekolahSeeder::class,

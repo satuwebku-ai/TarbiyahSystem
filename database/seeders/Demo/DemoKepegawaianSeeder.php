@@ -40,7 +40,7 @@ class DemoKepegawaianSeeder extends Seeder
             OrganizationalUnit::whereHas('type', fn ($q) => $q->whereIn('slug', ['pengurus-besar', 'komwil', 'komda']))
                 ->orderBy('code')->get()->each(function (OrganizationalUnit $unit) use (&$n) {
                     $n++;
-                    $this->seedEmployee("STF-{$unit->code}", $this->personName(500 + $n, $n % 2 ? 'female' : 'male'), 'staff', $unit, null, "Staf sekretariat {$unit->name}", 3000 + $n);
+                    $this->seedEmployee("STF-{$unit->code}", $this->personName(500 + $n, $n % 2 ? 'female' : 'male'), 'pb', $unit, null, "Staf sekretariat {$unit->name}", 3000 + $n);
                 });
 
             foreach ($this->schoolSpecs() as $spec) {
