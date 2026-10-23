@@ -150,6 +150,25 @@ class SeederTest extends TestCase
         $this->assertSame(5, OrganizationalUnitType::count());
     }
 
+    public function test_sample_data_can_be_enabled_in_production_with_the_env_flag(): void
+    {
+        $original = app()->environment();
+        app()->detectEnvironment(fn () => 'production');
+        config(['domains.seed_admin.password' => 'DariEnv#Rahasia2026', 'domains.seed_sample_data' => true]);
+
+        try {
+            (new DatabaseSeeder)->setContainer($this->app)->run();
+        } finally {
+            app()->detectEnvironment(fn () => $original);
+        }
+
+        $this->assertSame(32, OrganizationalUnit::count());
+        $this->assertSame(12, School::count());
+        $this->assertSame(138, Employee::count());
+        $this->assertSame(360, Student::count());
+        $this->assertSame(1, Admin::count());
+    }
+
     public function test_assignment_seeder_runs_the_prerequisite_seeders_and_is_repeatable(): void
     {
         $this->seed(PenugasanSeeder::class);

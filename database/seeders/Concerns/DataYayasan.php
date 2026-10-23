@@ -118,11 +118,11 @@ trait DataYayasan
         return '0852'.str_pad((string) (10000000 + ($seed * 7919) % 89999999), 8, '0', STR_PAD_LEFT);
     }
 
-    /** Data contoh bukan untuk database production. */
+    /** Data contoh bukan untuk database production, kecuali SEED_SAMPLE_DATA=true diisi eksplisit di .env. */
     protected function allowed(): bool
     {
-        if (app()->isProduction()) {
-            $this->command?->warn(class_basename(static::class).' dilewati: data contoh tidak dibuat di production.');
+        if (app()->isProduction() && ! config('domains.seed_sample_data')) {
+            $this->command?->warn(class_basename(static::class).' dilewati: data contoh tidak dibuat di production. Isi SEED_SAMPLE_DATA=true di .env bila server ini memang untuk uji coba.');
 
             return false;
         }

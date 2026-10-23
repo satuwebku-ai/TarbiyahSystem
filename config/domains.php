@@ -16,6 +16,10 @@ return [
     // Atur DEMO_LOGIN=true/false di .env. Selalu nonaktif di produksi kecuali DEMO_LOGIN=true diisi eksplisit.
     'demo_login' => filter_var(env('DEMO_LOGIN', env('APP_ENV') === 'local'), FILTER_VALIDATE_BOOLEAN),
 
+    // Data contoh fiktif (unit, jabatan, sekolah, pegawai, penugasan, siswa) lewat db:seed.
+    // Bawaan: hanya di luar production. Isi SEED_SAMPLE_DATA=true untuk server uji coba berstatus production.
+    'seed_sample_data' => filter_var(env('SEED_SAMPLE_DATA', false), FILTER_VALIDATE_BOOLEAN),
+
     // Akun Super Admin awal (dipakai SuperAdminSeeder)
     'seed_admin' => [
         'name'     => env('ADMIN_NAME', 'Super Admin'),
