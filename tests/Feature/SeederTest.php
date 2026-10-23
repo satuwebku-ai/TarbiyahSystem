@@ -79,8 +79,9 @@ class SeederTest extends TestCase
     public function test_super_admin_gets_the_configured_or_default_password_and_keeps_it_afterwards(): void
     {
         $this->seed(SuperAdminSeeder::class);
-        $admin = Admin::where('username', config('domains.seed_admin.username'))->firstOrFail();
+        $admin = Admin::where('username', SuperAdminSeeder::USERNAME)->firstOrFail();
         $this->assertTrue(Hash::check(SuperAdminSeeder::DEV_PASSWORD, $admin->password));
+        $this->assertSame(SuperAdminSeeder::EMAIL, $admin->email);
         $this->assertTrue($admin->is_active);
         $this->assertTrue($admin->hasRole('super-admin'));
 
