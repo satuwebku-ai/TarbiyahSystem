@@ -379,18 +379,18 @@ class SecurityHardeningTest extends TestCase
         return Student::query()->create($attrs + ['school_id' => $school->id, 'nis' => 'NIS-777', 'name' => 'Siti Data', 'status' => 'active']);
     }
 
-    private function register(string $nis, string $name = 'Nama Lain')
+    private function register(string $nis, string $birthDate = '2012-05-17')
     {
         config(['domains.pelajar_registration' => true]);
 
         return $this->post(route('pelajar.register.store'), [
-            'name' => $name, 'nis' => $nis, 'password' => 'Pelajar123x', 'password_confirmation' => 'Pelajar123x',
+            'nis' => $nis, 'birth_date' => $birthDate, 'password' => 'Pelajar123x', 'password_confirmation' => 'Pelajar123x',
         ]);
     }
 
     public function test_registration_requires_a_matching_active_student_and_links_the_account(): void
     {
-        $student = $this->registrationStudent();
+        $student = $this->registrationStudent(['birth_date' => '2012-05-17']);
 
         $this->register('NIS-000')->assertSessionHasErrors('nis');
         $this->assertSame(0, StudentAccount::count());
@@ -403,13 +403,37 @@ class SecurityHardeningTest extends TestCase
 
     public function test_registration_is_refused_for_inactive_or_already_linked_students(): void
     {
-        $this->registrationStudent(['nis' => 'NIS-LULUS', 'status' => 'graduated']);
+        $this->registrationStudent(['nis' => 'NIS-LULUS', 'status' => 'graduated', 'birth_date' => '2012-05-17']);
         $taken = StudentAccount::create(['name' => 'Pemilik', 'nis' => 'NIS-777', 'password' => 'Pelajar123x', 'is_active' => true]);
-        $this->registrationStudent(['student_account_id' => $taken->id]);
+        $this->registrationStudent(['student_account_id' => $taken->id, 'birth_date' => '2012-05-17']);
 
         $this->register('NIS-LULUS')->assertSessionHasErrors('nis');
         $this->post(route('pelajar.logout'));
         $this->register('NIS-777')->assertSessionHasErrors('nis');
         $this->assertSame(1, StudentAccount::count());
+    }
+
+    public function test_registration_needs_the_right_birth_date_and_guesses_are_limited_per_nis(): void
+    {
+        $this->registrationStudent(['birth_date' => '2012-05-17']);
+        $this->registrationStudent(['nis' => 'NIS-KOSONG', 'birth_date' => null]);
+
+        $this->register('NIS-777', '2012-05-18')->assertSessionHasErrors('nis');
+        $this->register('NIS-KOSONG', '2012-05-17')->assertSessionHasErrors('nis');   // tanpa tanggal lahir di data: tak bisa diverifikasi
+        $this->post(route('pelajar.register.store'), ['nis' => 'NIS-777', 'password' => 'Pelajar123x', 'password_confirmation' => 'Pelajar123x'])
+            ->assertSessionHasErrors('birth_date');
+        $this->assertSame(0, StudentAccount::count());
+
+        // Pesan sama untuk NIS yang tidak ada: keberadaan NIS tidak bocor.
+        $unknown = $this->register('NIS-TIDAK-ADA')->baseResponse->getSession()->get('errors')->get('nis');
+        $wrong = $this->register('NIS-777', '2012-05-19')->baseResponse->getSession()->get('errors')->get('nis');
+        $this->assertSame($unknown, $wrong);
+
+        // Setelah 5 tebakan salah untuk NIS yang sama, NIS itu ditutup walau tanggal lahirnya kini benar.
+        $this->register('NIS-777', '2012-05-20');
+        $this->register('NIS-777', '2012-05-21');
+        $this->register('NIS-777', '2012-05-22');
+        $this->register('NIS-777', '2012-05-17')->assertSessionHasErrors('nis');
+        $this->assertSame(0, StudentAccount::count());
     }
 }

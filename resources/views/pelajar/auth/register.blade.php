@@ -5,16 +5,17 @@
 <form method="POST" action="{{ route('pelajar.register.store') }}" novalidate>
   @csrf
   <div class="mb-3">
-    <label class="form-label" for="name">Nama lengkap</label>
-    <input id="name" name="name" value="{{ old('name') }}" required autofocus autocomplete="name"
-           class="form-control @error('name') is-invalid @enderror">
-    @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
-  </div>
-  <div class="mb-3">
     <label class="form-label" for="nis">NIS (Nomor Induk Pelajar)</label>
-    <input id="nis" name="nis" value="{{ old('nis') }}" required inputmode="numeric" autocomplete="username"
+    <input id="nis" name="nis" value="{{ old('nis') }}" required inputmode="numeric" autocomplete="username" autofocus
            class="form-control @error('nis') is-invalid @enderror">
     @error('nis') <div class="invalid-feedback">{{ $message }}</div> @enderror
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="birth_date">Tanggal lahir</label>
+    <input type="date" id="birth_date" name="birth_date" value="{{ old('birth_date') }}" required autocomplete="bday"
+           class="form-control @error('birth_date') is-invalid @enderror">
+    @error('birth_date') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    <div class="form-text">Harus sama dengan data di sekolah. Nama akun diambil dari data sekolah.</div>
   </div>
   <div class="mb-3">
     <label class="form-label" for="email">Email <span class="text-secondary">(opsional)</span></label>

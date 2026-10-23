@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\Student;
 use App\Models\StudentAccount;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,15 +24,24 @@ class RegisterController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name'     => ['required', 'string', 'max:100'],
-            'nis'      => ['required', 'string', 'regex:/^[0-9A-Za-z.\-]+$/', 'max:30', 'unique:student_accounts,nis'],
-            'email'    => ['nullable', 'email', 'max:150', 'unique:student_accounts,email'],
-            'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
-        ]);
+        $mismatch = 'Data tidak cocok dengan pelajar aktif yang belum memiliki akun. Periksa NIS dan tanggal lahir, atau hubungi admin sekolah.';
 
-        // NIS harus milik pelajar aktif di data sekolah yang belum punya akun; akun dikaitkan ke data itu.
-        $user = DB::transaction(function () use ($data) {
+        $data = $request->validate([
+            'nis'        => ['required', 'string', 'regex:/^[0-9A-Za-z.\-]+$/', 'max:30', 'unique:student_accounts,nis'],
+            'birth_date' => ['required', 'date_format:Y-m-d'],
+            'email'      => ['nullable', 'email', 'max:150', 'unique:student_accounts,email'],
+            'password'   => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
+        ], ['nis.unique' => $mismatch]);
+
+        // Tebakan tanggal lahir untuk satu NIS dibatasi, selain batas per IP di rute.
+        $limitKey = 'pelajar-register:'.sha1(strtolower($data['nis']));
+        if (RateLimiter::tooManyAttempts($limitKey, 5)) {
+            throw ValidationException::withMessages(['nis' => 'Terlalu banyak percobaan untuk NIS ini. Coba lagi nanti atau hubungi admin sekolah.']);
+        }
+
+        // NIS + tanggal lahir harus cocok dengan pelajar aktif di data sekolah yang belum punya akun;
+        // pesan galat sama untuk semua penyebab agar NIS tidak bisa ditebak keberadaannya.
+        $user = DB::transaction(function () use ($data, $limitKey, $mismatch) {
             $student = Student::query()
                 ->where('nis', $data['nis'])
                 ->where('status', 'active')
@@ -39,10 +49,10 @@ class RegisterController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if (! $student) {
-                throw ValidationException::withMessages([
-                    'nis' => 'NIS tidak ditemukan pada data pelajar aktif atau sudah memiliki akun. Hubungi admin sekolah.',
-                ]);
+            if (! $student || $student->birth_date?->toDateString() !== $data['birth_date']) {
+                RateLimiter::hit($limitKey, 3600);
+
+                throw ValidationException::withMessages(['nis' => $mismatch]);
             }
 
             $account = StudentAccount::create([
@@ -56,6 +66,7 @@ class RegisterController extends Controller
 
             return $account;
         });
+        RateLimiter::clear($limitKey);
 
         $role = Role::where('guard_name', 'pelajar')->where('name', 'pelajar')->first();
         if ($role) {
