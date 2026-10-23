@@ -16,11 +16,11 @@ return [
     // Atur DEMO_LOGIN=true/false di .env. Selalu nonaktif di produksi kecuali DEMO_LOGIN=true diisi eksplisit.
     'demo_login' => filter_var(env('DEMO_LOGIN', env('APP_ENV') === 'local'), FILTER_VALIDATE_BOOLEAN),
 
-    // Akun Super Admin awal (dipakai AdminSeeder)
+    // Akun Super Admin awal (dipakai SuperAdminSeeder)
     'seed_admin' => [
         'name'     => env('ADMIN_NAME', 'Super Admin'),
         'username' => env('ADMIN_USERNAME', 'admin'),
         'email'    => env('ADMIN_EMAIL', 'admin@namadomain.com'),
-        'password' => env('ADMIN_PASSWORD'),   // kosong => lokal: default, selain lokal: acak
+        'password' => env('ADMIN_PASSWORD'),   // kosong => non-production: password awal bawaan (lihat SuperAdminSeeder), production: acak
     ],
 ];

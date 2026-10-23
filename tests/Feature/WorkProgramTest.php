@@ -10,7 +10,6 @@ use App\Models\Role;
 use App\Models\UserUnitAccess;
 use App\Models\WorkActivity;
 use App\Models\WorkProgram;
-use Database\Seeders\Demo\DemoProgramSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -18,22 +17,6 @@ use Tests\TestCase;
 class WorkProgramTest extends TestCase
 {
     use RefreshDatabase;
-
-    public function test_demo_program_seeder_is_repeatable(): void
-    {
-        $this->seed(DemoProgramSeeder::class);
-        $counts = fn () => [WorkProgram::count(), WorkActivity::count(), DB::table('activity_reports')->count(), DB::table('activity_approvals')->count()];
-        $first = $counts();
-
-        $this->seed(DemoProgramSeeder::class);
-
-        $this->assertSame($first, $counts());
-        $this->assertSame(7, $first[0]);
-        $this->assertDatabaseHas('work_programs', ['code' => 'DEMO-PB-01', 'status' => 'approved']);
-        foreach (['approved', 'submitted', 'draft', 'rejected'] as $status) {
-            $this->assertTrue(WorkProgram::where('code', 'like', 'DEMO-KD-%')->where('status', $status)->exists(), $status);
-        }
-    }
 
     public function test_unit_restricted_admin_cannot_open_another_units_program(): void
     {

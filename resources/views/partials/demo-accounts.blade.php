@@ -16,6 +16,6 @@
       </button>
     </form>
   @empty
-    <div class="small text-secondary">Belum ada akun demo. Jalankan <code>php artisan db:seed --class=DemoSeeder</code>.</div>
+    <div class="small text-secondary">Belum ada akun demo. Jalankan <code>php artisan db:seed --class=SuperAdminSeeder</code>.</div>
   @endforelse
 @endif

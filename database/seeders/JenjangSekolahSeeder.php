@@ -5,8 +5,8 @@ namespace Database\Seeders;
 use App\Models\SchoolLevel;
 use Illuminate\Database\Seeder;
 
-/** Jenjang pendidikan SD/SMP/SMA. Data referensi: aman untuk production dan dijalankan berulang. */
-class SchoolLevelSeeder extends Seeder
+/** Jenjang pendidikan SD/SMP/SMA (prasyarat data sekolah). Aman untuk production dan dijalankan berulang. */
+class JenjangSekolahSeeder extends Seeder
 {
     public const LEVELS = [
         'sd' => ['SD', 1],

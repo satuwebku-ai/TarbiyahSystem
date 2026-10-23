@@ -12,7 +12,7 @@ use App\Models\Role;
 use App\Models\School;
 use App\Models\Student;
 use App\Models\StudentAccount;
-use Database\Seeders\PelajarSeeder;
+use Database\Seeders\SiswaSeeder;
 use App\Models\SchoolLevel;
 use App\Models\UserUnitAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -331,15 +331,17 @@ class SecurityHardeningTest extends TestCase
 
     // ---- opsi 2: seeder demo, sesi lain, registrasi pelajar --------------
 
-    public function test_demo_student_seeder_is_skipped_in_production(): void
+    public function test_sample_student_seeder_is_skipped_in_production(): void
     {
         $this->app['env'] = 'production';
-        (new PelajarSeeder)->run();
+        (new SiswaSeeder)->run();
+        $this->assertSame(0, \App\Models\Student::count());
         $this->assertSame(0, StudentAccount::count());
 
         $this->app['env'] = 'testing';
-        (new PelajarSeeder)->run();
-        $this->assertSame(1, StudentAccount::count());
+        $this->seed(SiswaSeeder::class);
+        $this->assertSame(360, \App\Models\Student::count());
+        $this->assertSame(0, StudentAccount::count(), 'Seeder tidak membuat akun dengan password tertulis di kode.');
     }
 
     public function test_password_change_by_someone_else_ends_other_sessions(): void
