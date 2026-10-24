@@ -19,7 +19,7 @@ class FingerprintPinController extends Controller
 {
     private const LIMIT = 400;
 
-    public function index(Request $request, StudentAttendanceAccess $access): View
+    public function index(Request $request, StudentAttendanceAccess $access): View|string
     {
         $admin = $request->user('admin');
         $schools = $access->schools($admin)->with('unit:id,name')->get()->sortBy('unit.name')->values();
@@ -51,7 +51,7 @@ class FingerprintPinController extends Controller
             'truncated' => $students->count() > self::LIMIT,
             'limit' => self::LIMIT,
             'filledCount' => $students->whereNotNull('fingerprint_pin')->count(),
-        ]);
+        ])->fragmentIf($request->ajax(), 'table');
     }
 
     public function update(Request $request, StudentAttendanceAccess $access, FingerprintAttendanceService $service): RedirectResponse

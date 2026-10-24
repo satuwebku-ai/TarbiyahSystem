@@ -28,7 +28,7 @@ class ReportController extends Controller
     ) {}
 
     /** Dashboard: ringkasan semua laporan yang boleh dilihat pengguna. */
-    public function index(Request $request): View
+    public function index(Request $request): View|string
     {
         $admin = $request->user('admin');
         [$from, $to, $unitId, $scope] = $this->context($request, $admin);
@@ -45,10 +45,10 @@ class ReportController extends Controller
             'to' => $to,
             'unitId' => $unitId,
             'units' => $this->access->availableUnits($admin),
-        ]);
+        ])->fragmentIf($request->ajax(), 'table');
     }
 
-    public function show(Request $request, string $report): View
+    public function show(Request $request, string $report): View|string
     {
         $admin = $request->user('admin');
         $definition = $this->authorizeType($admin, $report);
@@ -62,7 +62,7 @@ class ReportController extends Controller
             'to' => $to,
             'unitId' => $unitId,
             'units' => $this->access->availableUnits($admin),
-        ]);
+        ])->fragmentIf($request->ajax(), 'table');
     }
 
     /** Tampilan siap cetak; simpan sebagai PDF lewat dialog cetak browser. */

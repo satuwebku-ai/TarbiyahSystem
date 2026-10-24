@@ -8,7 +8,7 @@
   @include('partials.admin.select2-assets')
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.academic.student-attendance.report') }}" class="row g-2 align-items-end">
+      <form method="GET" action="{{ route('admin.academic.student-attendance.report') }}" class="row g-2 align-items-end" data-ajax-filter data-ajax-nopush>
         <div class="col-md-2">
           <label for="period" class="form-label small mb-1">Periode</label>
           <select id="period" name="period" class="form-select">
@@ -56,6 +56,8 @@
     </div>
   </div>
 
+  <div data-ajax-region>
+  @fragment('table')
   @if($period === 'year' && ! $selectedAcademicYear)
     <div class="alert alert-info">Pilih tahun ajaran untuk melihat rekap sepanjang tahun tersebut.</div>
   @endif
@@ -101,6 +103,8 @@
     </div>
     @if($rows->hasPages()) <div class="card-footer bg-transparent">{{ $rows->links() }}</div> @endif
   </div>
+  @endfragment
+  </div>
 
   <script>
     (() => {
@@ -117,5 +121,6 @@
   </script>
   @push('scripts')
     @include('partials.admin.school-classroom-sync')
+    @include('partials.admin.ajax-table')
   @endpush
 @endsection

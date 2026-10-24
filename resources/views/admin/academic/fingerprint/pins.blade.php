@@ -5,22 +5,24 @@
 @section('content')
   <div class="card border-0 shadow-sm">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.academic.fingerprint.pins.index') }}" class="row g-2 align-items-end">
+      <form method="GET" action="{{ route('admin.academic.fingerprint.pins.index') }}" class="row g-2 align-items-end" data-ajax-filter data-ajax-nopush>
         <div class="col-md-4"><label class="form-label small mb-1" for="school_id">Sekolah</label>
-          <select id="school_id" name="school_id" class="form-select" required onchange="this.form.querySelector('[name=classroom_id]')&&(this.form.querySelector('[name=classroom_id]').value='')">
+          <select id="school_id" name="school_id" class="form-select" required data-ajax-full onchange="var c=this.form.querySelector('[name=classroom_id]');if(c)c.value='';var q=this.form.querySelector('[name=q]');if(q)q.value='';if(this.value)this.form.submit()">
             <option value="">Pilih sekolah</option>
             @foreach($schools as $s)<option value="{{ $s->id }}" @selected($school?->id === $s->id)>{{ $s->unit?->name }}</option>@endforeach</select></div>
         @if($school)
           <div class="col-md-3"><label class="form-label small mb-1" for="classroom_id">Kelas (opsional)</label>
             <select id="classroom_id" name="classroom_id" class="form-select"><option value="">Semua siswa aktif</option>
               @foreach($classrooms as $c)<option value="{{ $c->id }}" @selected($classroom?->id === $c->id)>{{ $c->name }} · {{ $c->academicYear?->name }}</option>@endforeach</select></div>
-          <div class="col-md-3"><label class="form-label small mb-1" for="q">Cari nama / NIS</label><input id="q" name="q" value="{{ request('q') }}" class="form-control"></div>
+          <div class="col-md-3"><label class="form-label small mb-1" for="q">Cari nama / NIS</label><input id="q" name="q" value="{{ request('q') }}" class="form-control" autocomplete="off" data-ajax-live></div>
         @endif
         <div class="col-auto"><button class="btn btn-primary" type="submit">Tampilkan</button></div>
       </form>
     </div>
   </div>
 
+  <div data-ajax-region>
+  @fragment('table')
   @if($school)
     @error('pins')<div class="alert alert-danger mb-0">{{ $message }}</div>@enderror
     @if($errors->has('pins.*'))<div class="alert alert-danger mb-0">{{ $errors->first('pins.*') }}</div>@endif
@@ -54,4 +56,9 @@
       </div>
     </form>
   @endif
+  @endfragment
+  </div>
+  @push('scripts')
+    @include('partials.admin.ajax-table')
+  @endpush
 @endsection

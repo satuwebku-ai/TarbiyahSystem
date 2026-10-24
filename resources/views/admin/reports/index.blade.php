@@ -4,6 +4,8 @@
 @section('content')
   @include('admin.reports._filter', ['action' => route('admin.reports.index'), 'usesPeriod' => true])
 
+  <div data-ajax-region>
+  @fragment('table')
   @php
     $n = fn ($v) => number_format((int) $v, 0, ',', '.');
     $pct = fn ($v) => $v === null ? '–' : number_format((float) $v, 1, ',', '.').'%';
@@ -121,4 +123,6 @@
       </div>
     </div>
   @endif
+  @endfragment
+  </div>
 @endsection

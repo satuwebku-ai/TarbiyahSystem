@@ -223,7 +223,7 @@ class StudentAttendanceController extends Controller
         StudentAttendanceAccess $access,
         OrganizationAccess $organization,
         SchoolScope $scope
-    ): View {
+    ): View|string {
         $admin = $request->user('admin');
         $period = in_array($request->query('period'), ['month', 'year'], true)
             ? $request->query('period')
@@ -357,7 +357,7 @@ class StudentAttendanceController extends Controller
             'to' => $to,
             'counts' => $counts,
             'rows' => $rows,
-        ]);
+        ])->fragmentIf($request->ajax(), 'table');
     }
 
     private function parseDate(string $value): ?Carbon

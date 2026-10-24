@@ -4,7 +4,7 @@
 @endphp
 <div class="card border-0 shadow-sm mb-3">
   <div class="card-body">
-    <form method="GET" action="{{ $action }}" class="row g-2 align-items-end">
+    <form method="GET" action="{{ $action }}" class="row g-2 align-items-end" data-ajax-filter data-ajax-nopush>
       @if($usesPeriod)
         <div class="col-md-3 col-6">
           <label for="from" class="form-label small mb-1">Dari tanggal</label>
@@ -34,3 +34,6 @@
     </form>
   </div>
 </div>
+@push('scripts')
+  @include('partials.admin.ajax-table')
+@endpush

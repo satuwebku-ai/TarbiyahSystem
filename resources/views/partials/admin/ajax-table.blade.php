@@ -6,6 +6,8 @@
      - Pilihan dropdown/tanggal di form filter langsung diterapkan (tanpa menekan tombol).
      - URL diperbarui (pushState), jadi bisa di-bookmark; tombol Kembali memuat ulang halaman.
      - Input tersembunyi [data-ajax-sync] ikut diperbarui dari tautan (mis. tab status).
+     - Tautan di luar region dengan atribut data-ajax-qs ikut diperbarui query-nya (mis. Ekspor/Cetak).
+     - Elemen form dengan data-ajax-full tidak memicu AJAX (tetap navigasi biasa).
      - Tambahkan data-ajax-nopush pada form bila URL tidak boleh berubah (tanpa ?search=...&type_id=...).
      - Tambahkan data-ajax-live pada input teks agar pencarian jalan otomatis saat mengetik (debounce).
      - Bila gagal / sesi habis (redirect), otomatis jatuh ke navigasi biasa.
@@ -36,9 +38,16 @@
         region.innerHTML = html;
         region.classList.remove('is-loading');
         if (push) history.pushState({ ajax: 1 }, '', url);
+        syncLinks(url);
         if (scroll) region.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
       .catch(function () { window.location.href = url; });
+  }
+
+  // Tautan di luar region (mis. tombol Ekspor/Cetak) ikut membawa filter terbaru.
+  function syncLinks(url) {
+    var qs = new URL(url, location.href).search;
+    document.querySelectorAll('a[data-ajax-qs]').forEach(function (a) { a.href = a.href.split('?')[0] + qs; });
   }
 
   function formUrl() {
@@ -63,12 +72,13 @@
     // terapkan otomatis saat pilihan berubah (event 'change' dari tindakan pengguna, bukan sinkronisasi skrip)
     if (window.jQuery) {
       jQuery(form).on('change', 'select, input:not([type=hidden])', function () {
+        if (this.hasAttribute('data-ajax-full')) return;   // dikirim sebagai navigasi biasa
         clearTimeout(timer);
         timer = setTimeout(function () { load(formUrl(), pushUrl, false); }, 250);
       });
     } else {
       form.addEventListener('change', function (e) {
-        if (!e.target.matches('select, input:not([type=hidden])')) return;
+        if (!e.target.matches('select, input:not([type=hidden])') || e.target.hasAttribute('data-ajax-full')) return;
         clearTimeout(timer);
         timer = setTimeout(function () { load(formUrl(), pushUrl, false); }, 250);
       });
@@ -84,7 +94,7 @@
       var q = new URL(a.href, location.href).searchParams;
       form.querySelectorAll('input[data-ajax-sync]').forEach(function (i) { if (q.has(i.name)) i.value = q.get(i.name); });
     }
-    load(a.href, true, a.matches('.page-link'));
+    load(a.href, pushUrl, a.matches('.page-link'));
   });
 
   window.addEventListener('popstate', function () { window.location.reload(); });
