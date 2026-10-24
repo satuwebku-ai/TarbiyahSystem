@@ -296,17 +296,56 @@ class OrganizationalUnitController extends Controller
 
     private function validated(Request $request, ?OrganizationalUnit $unit = null): array
     {
+        $code = [
+            'required', 'string', 'min:1', 'max:40',
+            Rule::unique('organizational_units', 'code')->ignore($unit?->id),
+        ];
+        // Format kode diperketat untuk kode baru/berubah; kode lama yang tidak diubah tetap lolos.
+        if (! $unit || (string) $unit->code !== (string) $request->input('code')) {
+            $code[] = 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/';
+        }
+
         return $request->validate([
             'type_id' => ['required', 'integer', Rule::exists('organizational_unit_types', 'id')->where('is_active', true)],
             'parent_id' => ['nullable', 'integer', Rule::exists('organizational_units', 'id')->where('status', 'active')],
-            'code' => ['required', 'string', 'min:1', 'max:40', Rule::unique('organizational_units', 'code')->ignore($unit?->id)],
+            'code' => $code,
             'name' => ['required', 'string', 'min:2', 'max:160'],
             'description' => ['nullable', 'string', 'max:10000'],
             'address' => ['nullable', 'string', 'max:500'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
+        ], [
+            'type_id.required' => 'Pilih jenis unit terlebih dahulu.',
+            'type_id.exists' => 'Jenis unit tidak valid atau sudah tidak aktif.',
+            'parent_id.exists' => 'Unit induk tidak ditemukan atau sudah nonaktif.',
+            'code.required' => 'Kode unit wajib diisi.',
+            'code.max' => 'Kode unit maksimal :max karakter.',
+            'code.unique' => 'Kode ":input" sudah dipakai unit lain. Gunakan kode yang berbeda.',
+            'code.regex' => 'Kode hanya boleh huruf, angka, titik, garis bawah, dan tanda hubung (diawali huruf/angka), tanpa spasi.',
+            'name.required' => 'Nama unit wajib diisi.',
+            'name.min' => 'Nama unit minimal :min karakter.',
+            'name.max' => 'Nama unit maksimal :max karakter.',
+            'address.max' => 'Alamat maksimal :max karakter.',
+            'description.max' => 'Keterangan maksimal :max karakter.',
+            'status.required' => 'Pilih status unit.',
+            'status.in' => 'Status unit tidak valid.',
         ]);
     }
 
+    /** Cek ketersediaan kode secara langsung dari form (wizard). Hanya mengembalikan tersedia/tidak, tanpa membuka data unit lain. */
+    public function checkCode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'code' => ['required', 'string', 'max:40'],
+            'ignore' => ['nullable', 'integer'],
+        ]);
+
+        $taken = OrganizationalUnit::query()
+            ->where('code', $data['code'])
+            ->when($data['ignore'] ?? null, fn ($query, $id) => $query->whereKeyNot($id))
+            ->exists();
+
+        return response()->json(['available' => ! $taken]);
+    }
 
     private function assertParentAccess(?int $parentId, OrganizationAccess $access, ?OrganizationalUnit $current = null): void
     {

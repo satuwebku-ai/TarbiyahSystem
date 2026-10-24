@@ -1,0 +1,120 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Admin;
+use App\Models\OrganizationalUnit;
+use App\Models\OrganizationalUnitType;
+use App\Models\Role;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/** Form wizard unit organisasi: halaman, cek kode, dan validasi server berbahasa Indonesia. */
+class OrganizationUnitWizardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private OrganizationalUnitType $pb;
+
+    private OrganizationalUnitType $komwil;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $role = Role::query()->create(['name' => 'super-admin', 'label' => 'Super Admin', 'guard_name' => 'admin', 'is_system' => true]);
+        $admin = Admin::query()->create(['name' => 'SA', 'username' => 'sa-wz', 'email' => 'sa-wz@example.test', 'password' => 'Secure-Test-Password-2026!', 'is_active' => true]);
+        $admin->syncRoles([$role->id]);
+        $this->actingAs($admin, 'admin');
+
+        $this->pb = OrganizationalUnitType::query()->create(['name' => 'Pengurus Besar', 'slug' => 'pengurus-besar', 'is_active' => true]);
+        $this->komwil = OrganizationalUnitType::query()->create(['name' => 'KOMWIL', 'slug' => 'komwil', 'is_active' => true]);
+    }
+
+    private function makePb(string $code = 'PB-1'): OrganizationalUnit
+    {
+        return OrganizationalUnit::query()->create(['type_id' => $this->pb->id, 'code' => $code, 'name' => 'Pengurus Besar', 'status' => 'active']);
+    }
+
+    public function test_create_page_renders_the_wizard_steps(): void
+    {
+        $this->get(route('admin.organization.units.create'))
+            ->assertOk()
+            ->assertSee('wzSteps', false)
+            ->assertSee('Pilih jenis unit')
+            ->assertSee('Unit induk')
+            ->assertSee('Identitas')
+            ->assertSee('Detail');
+    }
+
+    public function test_edit_page_renders_the_wizard(): void
+    {
+        $unit = $this->makePb();
+
+        $this->get(route('admin.organization.units.edit', $unit))->assertOk()->assertSee('wzSteps', false);
+    }
+
+    public function test_check_code_reports_availability_and_ignores_own_unit(): void
+    {
+        $unit = $this->makePb('PB-1');
+
+        $this->getJson(route('admin.organization.units.check-code', ['code' => 'PB-1']))->assertOk()->assertJson(['available' => false]);
+        $this->getJson(route('admin.organization.units.check-code', ['code' => 'PB-9']))->assertOk()->assertJson(['available' => true]);
+        $this->getJson(route('admin.organization.units.check-code', ['code' => 'PB-1', 'ignore' => $unit->id]))->assertOk()->assertJson(['available' => true]);
+    }
+
+    public function test_check_code_requires_a_code(): void
+    {
+        $this->getJson(route('admin.organization.units.check-code'))->assertStatus(422);
+    }
+
+    public function test_store_rejects_invalid_code_format_with_indonesian_message(): void
+    {
+        $this->post(route('admin.organization.units.store'), [
+            'type_id' => $this->pb->id, 'code' => 'kode salah!', 'name' => 'Pengurus Besar', 'status' => 'active',
+        ])->assertSessionHasErrors(['code' => 'Kode hanya boleh huruf, angka, titik, garis bawah, dan tanda hubung (diawali huruf/angka), tanpa spasi.']);
+
+        $this->assertSame(0, OrganizationalUnit::query()->count());
+    }
+
+    public function test_store_rejects_duplicate_code_with_clear_message(): void
+    {
+        $this->makePb('PB-1');
+        $pb = $this->makePb('PB-0');
+
+        $this->post(route('admin.organization.units.store'), [
+            'type_id' => $this->komwil->id, 'parent_id' => $pb->id, 'code' => 'PB-1', 'name' => 'KOMWIL A', 'status' => 'active',
+        ])->assertSessionHasErrors(['code' => 'Kode "PB-1" sudah dipakai unit lain. Gunakan kode yang berbeda.']);
+    }
+
+    public function test_store_requires_name_and_type_with_indonesian_messages(): void
+    {
+        $this->post(route('admin.organization.units.store'), ['code' => 'X-1', 'status' => 'active'])
+            ->assertSessionHasErrors([
+                'type_id' => 'Pilih jenis unit terlebih dahulu.',
+                'name' => 'Nama unit wajib diisi.',
+            ]);
+    }
+
+    public function test_legacy_code_with_old_format_can_still_be_saved_when_unchanged(): void
+    {
+        $unit = OrganizationalUnit::query()->create(['type_id' => $this->pb->id, 'code' => 'kode lama', 'name' => 'Pengurus Besar', 'status' => 'active']);
+
+        $this->put(route('admin.organization.units.update', $unit), [
+            'type_id' => $this->pb->id, 'code' => 'kode lama', 'name' => 'Pengurus Besar Baru', 'status' => 'active',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('Pengurus Besar Baru', $unit->fresh()->name);
+    }
+
+    public function test_valid_submission_still_creates_the_unit(): void
+    {
+        $pb = $this->makePb();
+
+        $this->post(route('admin.organization.units.store'), [
+            'type_id' => $this->komwil->id, 'parent_id' => $pb->id, 'code' => 'KOMWIL-SULSEL', 'name' => 'KOMWIL Sulawesi Selatan', 'status' => 'active',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('organizational_units', ['code' => 'KOMWIL-SULSEL', 'parent_id' => $pb->id]);
+    }
+}

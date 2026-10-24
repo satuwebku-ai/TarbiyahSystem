@@ -287,6 +287,8 @@ Route::middleware(['auth', 'admin.session'])->group(function () {
             ->middleware('can:organization.view')->name('units.index');
         Route::get('units/create', [OrganizationalUnitController::class, 'create'])
             ->middleware('can:organization.units.manage')->name('units.create');
+        Route::get('units/check-code', [OrganizationalUnitController::class, 'checkCode'])
+            ->middleware(['can:organization.units.manage', 'throttle:60,1'])->name('units.check-code');
         Route::post('units', [OrganizationalUnitController::class, 'store'])
             ->middleware('can:organization.units.manage')->name('units.store');
         Route::get('units/{unit}', [OrganizationalUnitController::class, 'show'])

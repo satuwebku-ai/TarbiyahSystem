@@ -6,6 +6,7 @@
   @endcan
 @endsection
 @section('content')
+  @include('partials.admin.select2-assets')
   <div class="mb-3">@include('admin.organization.partials.setup-steps', ['active' => 'units', 'compact' => true])</div>
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
@@ -22,7 +23,7 @@
         @endif
         <div class="col-sm-5 col-lg-3">
           <label for="type_id" class="form-label small mb-1">Jenis unit</label>
-          <select id="type_id" name="type_id" class="form-select">
+          <select id="type_id" name="type_id" class="form-select js-select2" data-placeholder="Semua jenis">
             <option value="">Semua jenis</option>
             @foreach($types as $type)<option value="{{ $type->id }}" @selected(($filters['type_id'] ?? '') == $type->id)>{{ $type->name }}</option>@endforeach
           </select>
