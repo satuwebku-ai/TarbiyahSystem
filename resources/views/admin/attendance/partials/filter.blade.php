@@ -2,7 +2,7 @@
 @include('partials.admin.select2-assets')
 <div class="card border-0 shadow-sm mb-3">
   <div class="card-body">
-    <form method="GET" action="{{ $action }}" class="row g-2 align-items-end" data-ajax-filter>
+    <form method="GET" action="{{ $action }}" class="row g-2 align-items-end" data-ajax-filter data-ajax-nopush>
       <div class="col-md-2">
         <label class="form-label small mb-1" for="period">{{ $periodLabel }}</label>
         <input id="period" type="{{ $periodType }}" name="{{ $periodName }}" value="{{ $periodValue }}" class="form-control">
