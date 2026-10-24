@@ -22,5 +22,6 @@ Schedule::command('student-attendance:close-day')->everyFiveMinutes()->timezone(
 // Cadangan database harian (14 berkas terbaru disimpan di storage/app/private/backups).
 // Berkas memuat data pribadi & hash kata sandi: salin juga ke luar server (akses terbatas).
 Schedule::command('db:backup')->dailyAt('01:00')->timezone($tz)->withoutOverlapping();
+Schedule::command('fingerprint:prune-pending')->dailyAt('03:00')->timezone($tz)->withoutOverlapping();
 Schedule::command('notifications:prune')->weeklyOn(0, '02:00')->timezone($tz)->withoutOverlapping();
 Schedule::command('queue:prune-failed', ['--hours' => 720])->weeklyOn(0, '02:30')->timezone($tz);
