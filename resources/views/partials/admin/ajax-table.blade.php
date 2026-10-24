@@ -6,6 +6,8 @@
      - Pilihan dropdown/tanggal di form filter langsung diterapkan (tanpa menekan tombol).
      - URL diperbarui (pushState), jadi bisa di-bookmark; tombol Kembali memuat ulang halaman.
      - Input tersembunyi [data-ajax-sync] ikut diperbarui dari tautan (mis. tab status).
+     - Tambahkan data-ajax-nopush pada form bila URL tidak boleh berubah (tanpa ?search=...&type_id=...).
+     - Tambahkan data-ajax-live pada input teks agar pencarian jalan otomatis saat mengetik (debounce).
      - Bila gagal / sesi habis (redirect), otomatis jatuh ke navigasi biasa.
      Butuh @include('partials.admin.select2-assets') bila ingin pilihan otomatis diterapkan (memakai jQuery). --}}
 @once
@@ -19,6 +21,7 @@
   if (!region || !window.fetch) return;
   var form = document.querySelector('form[data-ajax-filter]');
   var seq = 0, timer = null;
+  var pushUrl = !(form && form.hasAttribute('data-ajax-nopush'));
 
   function load(url, push, scroll) {
     var n = ++seq;
@@ -49,13 +52,19 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       clearTimeout(timer);
-      load(formUrl(), true, false);
+      load(formUrl(), pushUrl, false);
+    });
+    // pencarian langsung saat mengetik
+    form.addEventListener('input', function (e) {
+      if (!e.target.matches('[data-ajax-live]')) return;
+      clearTimeout(timer);
+      timer = setTimeout(function () { load(formUrl(), pushUrl, false); }, 350);
     });
     // terapkan otomatis saat pilihan berubah (event 'change' dari tindakan pengguna, bukan sinkronisasi skrip)
     if (window.jQuery) {
       jQuery(form).on('change', 'select, input:not([type=hidden])', function () {
         clearTimeout(timer);
-        timer = setTimeout(function () { load(formUrl(), true, false); }, 250);
+        timer = setTimeout(function () { load(formUrl(), pushUrl, false); }, 250);
       });
     }
   }

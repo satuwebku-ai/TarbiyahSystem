@@ -10,14 +10,14 @@
   <div class="mb-3">@include('admin.organization.partials.setup-steps', ['active' => 'units', 'compact' => true])</div>
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" id="unitFilter" action="{{ route('admin.organization.units.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="unitFilter" action="{{ route('admin.organization.units.index') }}" class="row g-2 align-items-end" @if ($view === 'tree') data-ajax-filter data-ajax-nopush @endif>
         <input type="hidden" name="view" value="{{ $view }}">
         @if ($view === 'tree')
         <div class="col-lg-5">
           <label for="search" class="form-label small mb-1">Cari unit</label>
           <div class="input-group">
             <span class="input-group-text bg-transparent"><x-icon name="search" size="15"/></span>
-            <input id="search" name="search" value="{{ $filters['search'] ?? '' }}" class="form-control" placeholder="Nama atau kode unit">
+            <input id="search" name="search" value="{{ $filters['search'] ?? '' }}" class="form-control" placeholder="Nama atau kode unit" autocomplete="off" data-ajax-live>
           </div>
         </div>
         @endif
@@ -46,6 +46,8 @@
 
   @include('admin.organization.partials.unit-flow', ['flow' => $flow ?? [], 'view' => $view])
 
+  <div data-ajax-region>
+  @fragment('table')
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div class="small text-secondary">
       @if ($view === 'tree')
@@ -109,6 +111,8 @@
     </div>
   </div>
   @endif
+  @endfragment
+  </div>
 
   @include('admin.organization.partials.add-unit-modal', ['returnTo' => 'units'])
 @endsection
@@ -117,6 +121,7 @@
   @if ($view === 'tree')
     @include('admin.organization.partials.tree-styles')
     @include('admin.organization.partials.tree-scripts')
+    @include('partials.admin.ajax-table')
     <style>
       .org-tree-row.org-match { background:rgba(var(--bs-warning-rgb),.15); }
       .org-tree-meta { flex:0 0 auto; }

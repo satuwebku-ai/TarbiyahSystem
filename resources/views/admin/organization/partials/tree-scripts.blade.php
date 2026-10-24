@@ -1,36 +1,39 @@
 <script>
 (function () {
-  var tree = document.getElementById('orgTree');
-  if (!tree) return;
-  var $ = function (id) { return document.getElementById(id); };
+  // Semua handler memakai delegasi + pencarian elemen saat dipakai, supaya tetap jalan
+  // setelah bagan diganti lewat AJAX (data-ajax-region).
+  function tree() { return document.getElementById('orgTree'); }
 
   function setAll(open) {
-    tree.querySelectorAll('.org-tree-children').forEach(function (el) {
-      el.classList.toggle('show', open);
-    });
-    tree.querySelectorAll('button.org-tree-toggle').forEach(function (b) {
-      b.classList.toggle('collapsed', !open);
-    });
-    tree.querySelectorAll('[aria-expanded]').forEach(function (li) {
-      li.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
+    var t = tree(); if (!t) return;
+    t.querySelectorAll('.org-tree-children').forEach(function (el) { el.classList.toggle('show', open); });
+    t.querySelectorAll('button.org-tree-toggle').forEach(function (b) { b.classList.toggle('collapsed', !open); });
+    t.querySelectorAll('[aria-expanded]').forEach(function (li) { li.setAttribute('aria-expanded', open ? 'true' : 'false'); });
   }
-  if ($('orgExpandAll')) $('orgExpandAll').addEventListener('click', function () { setAll(true); });
-  if ($('orgCollapseAll')) $('orgCollapseAll').addEventListener('click', function () { setAll(false); });
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('#orgExpandAll')) setAll(true);
+    else if (e.target.closest('#orgCollapseAll')) setAll(false);
+  });
 
   // sinkronkan aria-expanded saat collapse berubah
-  tree.addEventListener('shown.bs.collapse', function (e) { e.target.parentElement.setAttribute('aria-expanded', 'true'); });
-  tree.addEventListener('hidden.bs.collapse', function (e) { e.target.parentElement.setAttribute('aria-expanded', 'false'); });
+  document.addEventListener('shown.bs.collapse', function (e) {
+    if (e.target.closest('#orgTree')) e.target.parentElement.setAttribute('aria-expanded', 'true');
+  });
+  document.addEventListener('hidden.bs.collapse', function (e) {
+    if (e.target.closest('#orgTree')) e.target.parentElement.setAttribute('aria-expanded', 'false');
+  });
 
-  // pencarian: tampilkan unit yang cocok beserta induknya
-  var input = $('orgSearch'), empty = $('orgTreeEmpty');
-  if (!input) return;
-  input.addEventListener('input', function () {
-    var q = input.value.trim().toLowerCase();
-    var items = tree.querySelectorAll('.org-tree-item');
+  // pencarian sisi-klien (hanya dasbor organisasi yang memiliki #orgSearch)
+  document.addEventListener('input', function (e) {
+    if (e.target.id !== 'orgSearch') return;
+    var t = tree(), empty = document.getElementById('orgTreeEmpty');
+    if (!t) return;
+    var q = e.target.value.trim().toLowerCase();
+    var items = t.querySelectorAll('.org-tree-item');
     if (!q) {
       items.forEach(function (li) { li.classList.remove('org-hide'); });
-      empty.classList.add('d-none');
+      if (empty) empty.classList.add('d-none');
       return;
     }
     items.forEach(function (li) { li.classList.add('org-hide'); });
@@ -39,12 +42,12 @@
       var row = li.querySelector(':scope > .org-tree-row');
       if (row.textContent.toLowerCase().indexOf(q) === -1) return;
       found++;
-      for (var n = li; n && n !== tree; n = n.parentElement) {
+      for (var n = li; n && n !== t; n = n.parentElement) {
         if (n.classList.contains('org-tree-item')) n.classList.remove('org-hide');
       }
     });
     if (found) setAll(true);
-    empty.classList.toggle('d-none', found > 0);
+    if (empty) empty.classList.toggle('d-none', found > 0);
   });
 })();
 </script>

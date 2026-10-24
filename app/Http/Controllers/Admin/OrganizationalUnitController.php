@@ -28,7 +28,7 @@ class OrganizationalUnitController extends Controller
     {
     }
 
-    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse|string
     {
         /** @var Admin $admin */
         $admin = auth('admin')->user();
@@ -100,7 +100,7 @@ class OrganizationalUnitController extends Controller
      * Tampilan bagan: unit yang cocok dengan filter ditampilkan bersama seluruh induknya
      * agar posisinya dalam struktur tetap terlihat.
      */
-    private function treeIndex(Request $request, Admin $admin, ?array $visibleIds, Collection $types): View
+    private function treeIndex(Request $request, Admin $admin, ?array $visibleIds, Collection $types): View|string
     {
         $query = OrganizationalUnit::query()
             ->with('type:id,slug,name')
@@ -164,7 +164,7 @@ class OrganizationalUnitController extends Controller
             'flow' => $this->hierarchy->flowSteps($all, $addable, $rootTypes),
             'unitNames' => $all->pluck('name', 'id')->all(),
             'ownInvalidIds' => $this->hierarchy->audit()['own'],
-        ]);
+        ])->fragmentIf($request->ajax(), 'table'); // pencarian AJAX: hanya bagian bagan yang dikirim
     }
 
     /** @return array<int, array{unit: OrganizationalUnit, children: array}> */
