@@ -59,6 +59,16 @@ class DataTablesEndpointsTest extends TestCase
         }
     }
 
+    public function test_unexpected_error_on_datatable_request_returns_json_error(): void
+    {
+        Route::middleware('web')->get('/_dt-boom', fn () => throw new \RuntimeException('boom'));
+
+        $this->getJson('/_dt-boom?draw=3')
+            ->assertStatus(500)
+            ->assertJsonStructure(['draw', 'recordsTotal', 'recordsFiltered', 'data', 'error'])
+            ->assertJsonPath('draw', 3);
+    }
+
     public function test_prune_pending_removes_only_stale_unclaimed_devices(): void
     {
         $stale = FingerprintDevice::query()->create(['serial_number' => 'OLD001', 'name' => 'Lama', 'is_active' => false]);

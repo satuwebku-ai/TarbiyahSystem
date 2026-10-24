@@ -83,6 +83,31 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+    // Galat tak terduga pada permintaan DataTables (ada parameter "draw") dibalas JSON agar tabel
+    // menampilkan pesan + tombol "Coba lagi", bukan indikator "Memuat" yang macet. Tetap dicatat di log.
+    $exceptions->render(function (\Throwable $e, Request $request) {
+        if (! $request->has('draw') || ! $request->expectsJson()) {
+            return null;
+        }
+        if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+            || $e instanceof \Illuminate\Validation\ValidationException
+            || $e instanceof \Illuminate\Auth\AuthenticationException
+            || $e instanceof \Illuminate\Auth\Access\AuthorizationException
+            || $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return null;
+        }
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+            'error' => config('app.debug')
+                ? $e->getMessage()
+                : 'Terjadi kesalahan di server (pukul '.now()->format('H:i:s').'). Hubungi admin bila berulang.',
+        ], 500);
+    });
+
     $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, Request $request) {
         // Hanya 404 (halaman/data tidak ada) dan 405 (metode salah).
         if (! in_array($e->getStatusCode(), [404, 405], true)) {
