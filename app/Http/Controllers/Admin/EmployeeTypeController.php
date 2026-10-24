@@ -9,17 +9,33 @@ use App\Models\EmployeeType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class EmployeeTypeController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View|JsonResponse
     {
-        $types = EmployeeType::query()->orderBy('name')->paginate(20);
-        $counts = Employee::query()->whereIn('employee_type', $types->pluck('code'))
-            ->selectRaw('employee_type, COUNT(*) as total')->groupBy('employee_type')->pluck('total', 'employee_type');
+        if (Dt::wants($request)) {
+            $query = EmployeeType::query()->addSelect([
+                'employees_total' => Employee::query()->selectRaw('COUNT(*)')->whereColumn('employees.employee_type', 'employee_types.code'),
+            ])->addSelect('employee_types.*');
 
-        return view('admin.employees.types.index', ['types' => $types, 'counts' => $counts]);
+            return DataTables::eloquent($query)
+                ->editColumn('name', fn (EmployeeType $t) => Dt::stack($t->name, $t->description))
+                ->editColumn('code', fn (EmployeeType $t) => '<code>'.e($t->code).'</code>')
+                ->editColumn('employees_total', fn (EmployeeType $t) => Dt::num($t->employees_total))
+                ->editColumn('is_active', fn (EmployeeType $t) => Dt::badge($t->is_active))
+                ->addColumn('action', fn (EmployeeType $t) => view('admin.employees.types._actions', ['type' => $t])->render())
+                ->orderColumn('employees_total', 'employees_total $1')
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('description', 'like', "%{$kw}%")))
+                ->rawColumns(['name', 'code', 'is_active', 'action'])
+                ->make(true);
+        }
+
+        return view('admin.employees.types.index');
     }
 
     public function create(): View

@@ -14,11 +14,14 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class WorkProgramController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access): View
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
     {
         $admin = $request->user('admin');
         $visibleIds = $access->visibleUnitIds($admin);
@@ -41,8 +44,21 @@ class WorkProgramController extends Controller
                 ->orWhere('code', 'like', "%{$search}%"));
         }
 
+        if (Dt::wants($request)) {
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('title', fn (WorkProgram $p) => Dt::stack($p->title, $p->code))
+                ->addColumn('unit_name', fn (WorkProgram $p) => e($p->unit?->name ?? '—'))
+                ->editColumn('start_date', fn (WorkProgram $p) => '<span class="text-nowrap">'.e($p->start_date->format('d M Y')).' – '.e($p->end_date->format('d M Y')).'</span>')
+                ->editColumn('status', fn (WorkProgram $p) => '<span class="badge text-bg-'.($p->status === 'approved' ? 'success' : ($p->status === 'submitted' ? 'warning' : ($p->status === 'rejected' ? 'danger' : 'secondary'))).'">'.e(WorkProgram::STATUSES[$p->status] ?? $p->status).'</span>')
+                ->addColumn('action', fn (WorkProgram $p) => view('admin.programs._actions', ['program' => $p])->render())
+                ->orderColumn('unit_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'organizational_unit_id', 'work_programs'))
+                ->filterColumn('title', fn ($q, $kw) => $q->where(fn ($w) => $w->where('title', 'like', "%{$kw}%")->orWhere('code', 'like', "%{$kw}%")))
+                ->filterColumn('unit_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_unit_id', 'organizational_units', ['name'], $kw))
+                ->rawColumns(['title', 'unit_name', 'start_date', 'status', 'action'])
+                ->make(true);
+        }
+
         return view('admin.programs.index', [
-            'programs' => $query->orderByDesc('start_date')->orderBy('title')->paginate(20)->withQueryString(),
             'units' => $this->availableUnits($visibleIds),
             'filters' => $filters,
             'statuses' => WorkProgram::STATUSES,

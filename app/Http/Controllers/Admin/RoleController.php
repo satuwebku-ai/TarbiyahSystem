@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class RoleController extends Controller implements HasMiddleware
 {
@@ -26,14 +28,26 @@ class RoleController extends Controller implements HasMiddleware
         ];
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $this->authorizeRoleAdministration();
-        $roles = Role::where('guard_name', self::GUARD)
-            ->withCount(['permissions', 'admins'])
-            ->orderBy('id')->get();
 
-        return view('admin.roles.index', compact('roles'));
+        if (Dt::wants($request)) {
+            $query = Role::where('guard_name', self::GUARD)->withCount(['permissions', 'admins']);
+
+            return DataTables::eloquent($query)
+                ->editColumn('label', fn (Role $r) => '<div class="fw-semibold">'.e($r->label).($r->is_system ? ' <span class="badge badge-soft-secondary">sistem</span>' : '').'</div>'
+                    .'<div class="text-secondary small">'.e($r->description).'</div>')
+                ->editColumn('name', fn (Role $r) => '<code>'.e($r->name).'</code>')
+                ->editColumn('permissions_count', fn (Role $r) => $r->name === 'super-admin' ? 'Semua' : (string) $r->permissions_count)
+                ->editColumn('admins_count', fn (Role $r) => (string) $r->admins_count)
+                ->addColumn('action', fn (Role $r) => view('admin.roles._actions', ['role' => $r])->render())
+                ->filterColumn('label', fn ($q, $kw) => $q->where(fn ($w) => $w->where('label', 'like', "%{$kw}%")->orWhere('description', 'like', "%{$kw}%")))
+                ->rawColumns(['label', 'name', 'action'])
+                ->make(true);
+        }
+
+        return view('admin.roles.index');
     }
 
     public function create()

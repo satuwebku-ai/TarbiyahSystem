@@ -13,25 +13,48 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class FingerprintDeviceController extends Controller
 {
-    public function index(Request $request, StudentAttendanceAccess $access): View
+    public function index(Request $request, StudentAttendanceAccess $access): View|JsonResponse
     {
         $admin = $request->user('admin');
+        $canManage = $admin->can('education.fingerprint.manage');
 
-        $devices = $this->scoped($request, $access)
-            ->with('school.unit:id,name')
-            ->withCount(['logs as unmapped_count' => fn (Builder $q) => $q->where('result', 'unmapped')])
-            ->orderByRaw('school_id is null desc')
-            ->orderBy('name')
-            ->get();
+        if (Dt::wants($request)) {
+            $query = $this->scoped($request, $access)
+                ->with('school.unit:id,name')
+                ->withCount(['logs as unmapped_count' => fn (Builder $q) => $q->where('result', 'unmapped')]);
+
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('name', fn (FingerprintDevice $d) => view('admin.academic.fingerprint.devices._cell', ['col' => 'name', 'device' => $d])->render())
+                ->addColumn('school_name', fn (FingerprintDevice $d) => e($d->school?->unit?->name ?? '—'))
+                ->addColumn('connection', fn (FingerprintDevice $d) => view('admin.academic.fingerprint.devices._cell', ['col' => 'connection', 'device' => $d])->render())
+                ->addColumn('logs', fn (FingerprintDevice $d) => view('admin.academic.fingerprint.devices._cell', ['col' => 'logs', 'device' => $d])->render())
+                ->addColumn('status', fn (FingerprintDevice $d) => view('admin.academic.fingerprint.devices._cell', ['col' => 'status', 'device' => $d])->render())
+                ->addColumn('action', fn (FingerprintDevice $d) => view('admin.academic.fingerprint.devices._cell', ['col' => 'action', 'device' => $d, 'canManage' => $canManage])->render())
+                ->orderColumn('school_name', fn ($q, $dir) => $q->orderBy(
+                    \Illuminate\Support\Facades\DB::table('schools as sc')->join('organizational_units as ou', 'ou.id', '=', 'sc.organizational_unit_id')
+                        ->select('ou.name')->whereColumn('sc.id', 'fingerprint_devices.school_id')->limit(1), $dir === 'desc' ? 'desc' : 'asc'))
+                ->orderColumn('connection', 'last_seen_at $1')
+                ->orderColumn('logs', 'total_logs $1')
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('serial_number', 'like', "%{$kw}%")->orWhere('location', 'like', "%{$kw}%")))
+                ->filterColumn('school_name', fn ($q, $kw) => $q->whereIn('school_id', fn ($sub) => $sub->select('id')->from('schools')
+                    ->whereIn('organizational_unit_id', fn ($u) => $u->select('id')->from('organizational_units')->where('name', 'like', "%{$kw}%"))))
+                ->rawColumns(['name', 'school_name', 'connection', 'logs', 'status', 'action'])
+                ->make(true);
+        }
+
+        $devices = $this->scoped($request, $access)->with('school.unit:id,name')->get();
 
         return view('admin.academic.fingerprint.devices.index', [
-            'devices' => $devices,
+            'pendingCount' => $devices->filter->isPending()->count(),
             'pushUrl' => url('/iclock/cdata'),
-            'canManage' => $admin->can('education.fingerprint.manage'),
+            'canManage' => $canManage,
         ]);
     }
 

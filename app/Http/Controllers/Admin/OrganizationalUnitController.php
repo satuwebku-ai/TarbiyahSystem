@@ -17,7 +17,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class OrganizationalUnitController extends Controller
 {
@@ -25,7 +28,7 @@ class OrganizationalUnitController extends Controller
     {
     }
 
-    public function index(Request $request, OrganizationAccess $access): View
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
     {
         /** @var Admin $admin */
         $admin = auth('admin')->user();
@@ -44,11 +47,6 @@ class OrganizationalUnitController extends Controller
 
         $this->applyScope($query, $visibleIds);
 
-        if ($search = trim((string) $request->query('search'))) {
-            $query->where(fn (Builder $builder) => $builder
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('code', 'like', "%{$search}%"));
-        }
         if ($typeId = $request->integer('type_id')) {
             $query->where('type_id', $typeId);
         }
@@ -56,9 +54,28 @@ class OrganizationalUnitController extends Controller
             $query->where('status', $request->query('status'));
         }
 
+        if (Dt::wants($request)) {
+            $canManage = $admin->can('organization.units.manage');
+
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('name', fn (OrganizationalUnit $u) => '<div class="fw-semibold">'.e($u->name).'</div><div class="small text-secondary"><code>'.e($u->code).'</code></div>')
+                ->addColumn('type_name', fn (OrganizationalUnit $u) => e($u->type?->name ?? '—'))
+                ->addColumn('parent_name', fn (OrganizationalUnit $u) => e($u->parent?->name ?? 'Unit induk'))
+                ->editColumn('children_count', fn (OrganizationalUnit $u) => Dt::num($u->children_count))
+                ->editColumn('positions_count', fn (OrganizationalUnit $u) => Dt::num($u->positions_count))
+                ->editColumn('status', fn (OrganizationalUnit $u) => Dt::badge($u->status === 'active'))
+                ->addColumn('action', fn (OrganizationalUnit $u) => view('admin.organization.units._actions', ['unit' => $u, 'canManage' => $canManage])->render())
+                ->orderColumn('type_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_unit_types', 'type_id', 'organizational_units'))
+                ->orderColumn('parent_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'parent_id', 'organizational_units'))
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('code', 'like', "%{$kw}%")))
+                ->filterColumn('type_name', fn ($q, $kw) => Dt::filterRelated($q, 'type_id', 'organizational_unit_types', ['name'], $kw))
+                ->filterColumn('parent_name', fn ($q, $kw) => Dt::filterRelated($q, 'parent_id', 'organizational_units', ['name', 'code'], $kw))
+                ->rawColumns(['name', 'type_name', 'parent_name', 'status', 'action'])
+                ->make(true);
+        }
+
         return view('admin.organization.units.index', [
             'view' => 'table',
-            'units' => $query->paginate(25)->withQueryString(),
             'types' => $types,
             'filters' => $request->only(['search', 'type_id', 'status']),
         ]);

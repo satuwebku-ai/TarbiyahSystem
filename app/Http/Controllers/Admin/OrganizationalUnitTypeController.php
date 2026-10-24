@@ -7,19 +7,32 @@ use App\Models\AdminAuditLog;
 use App\Models\OrganizationalUnitType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class OrganizationalUnitTypeController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View|JsonResponse
     {
-        return view('admin.organization.unit-types.index', [
-            'types' => OrganizationalUnitType::query()
-                ->withCount('units')
-                ->orderBy('name')
-                ->paginate(20),
-        ]);
+        if (Dt::wants($request)) {
+            $query = OrganizationalUnitType::query()->withCount('units');
+
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('name', fn (OrganizationalUnitType $t) => Dt::stack($t->name, $t->description))
+                ->editColumn('slug', fn (OrganizationalUnitType $t) => '<code>'.e($t->slug).'</code>')
+                ->editColumn('units_count', fn (OrganizationalUnitType $t) => Dt::num($t->units_count))
+                ->editColumn('is_active', fn (OrganizationalUnitType $t) => Dt::badge($t->is_active))
+                ->addColumn('action', fn (OrganizationalUnitType $t) => view('admin.organization.unit-types._actions', ['type' => $t])->render())
+                ->orderColumn('name', 'name $1')
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('description', 'like', "%{$kw}%")))
+                ->rawColumns(['name', 'slug', 'is_active', 'action'])
+                ->make(true);
+        }
+
+        return view('admin.organization.unit-types.index');
     }
 
     public function create(): View

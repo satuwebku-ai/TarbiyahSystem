@@ -8,14 +8,17 @@ use App\Models\AttendancePolicy;
 use App\Services\EmployeeAccess;
 use App\Services\OrganizationAccess;
 use App\Services\SchoolScope;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AttendancePolicyController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $org, SchoolScope $schools): View|string
+    public function index(Request $request, OrganizationAccess $org, SchoolScope $schools): View|JsonResponse
     {
         $admin = $request->user('admin');
         $visible = $org->visibleUnitIds($admin);
@@ -24,15 +27,29 @@ class AttendancePolicyController extends Controller
         $filters = $schools->filters($request);
         $related = $schools->relatedUnitIds($admin, $filters);
 
-        return view('admin.attendance.policies.index', [
-            'policies' => AttendancePolicy::query()->with('unit:id,name,code')
+        if (Dt::wants($request)) {
+            $query = AttendancePolicy::query()->with('unit:id,name,code')
                 ->when($visible !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('organizational_unit_id')->orWhereIn('organizational_unit_id', $visible)))
-                ->when($related !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('organizational_unit_id')->orWhereIn('organizational_unit_id', $related)))
-                ->orderByRaw('organizational_unit_id is not null')->orderBy('name')->get(),
-            'isUnrestricted' => $visible === null,
+                ->when($related !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('organizational_unit_id')->orWhereIn('organizational_unit_id', $related)));
+
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('name', fn (AttendancePolicy $p) => '<span class="fw-semibold">'.e($p->name).'</span>')
+                ->addColumn('unit_name', fn (AttendancePolicy $p) => e($p->unit?->name ?? 'Umum (seluruh organisasi)'))
+                ->addColumn('days', fn (AttendancePolicy $p) => e($p->dayLabels()))
+                ->addColumn('hours', fn (AttendancePolicy $p) => '<span class="text-nowrap">'.e(substr($p->work_start, 0, 5)).'–'.e(substr($p->work_end, 0, 5)).'</span>')
+                ->editColumn('late_tolerance_minutes', fn (AttendancePolicy $p) => e($p->late_tolerance_minutes).' menit')
+                ->editColumn('is_active', fn (AttendancePolicy $p) => Dt::badge((bool) $p->is_active))
+                ->addColumn('action', fn (AttendancePolicy $p) => view('admin.attendance.policies._actions', ['p' => $p, 'isUnrestricted' => $visible === null])->render())
+                ->orderColumn('unit_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'organizational_unit_id', 'attendance_policies'))
+                ->filterColumn('unit_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_unit_id', 'organizational_units', ['name', 'code'], $kw))
+                ->rawColumns(['name', 'unit_name', 'days', 'hours', 'is_active', 'action'])
+                ->make(true);
+        }
+
+        return view('admin.attendance.policies.index', [
             'scope' => $schools->options($admin),
             'filters' => $filters,
-        ])->fragmentIf($request->ajax(), 'table');
+        ]);
     }
 
     public function create(Request $request, EmployeeAccess $access, OrganizationAccess $org): View

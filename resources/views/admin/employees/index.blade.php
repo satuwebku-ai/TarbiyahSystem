@@ -8,7 +8,7 @@
 @section('content')
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.employees.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="employeeFilter" action="{{ route('admin.employees.index') }}" class="row g-2 align-items-end">
         <div class="col-md-4">
           <label for="q" class="form-label small mb-1">Cari nama / nomor pegawai</label>
           <input id="q" name="q" value="{{ $filters['q'] }}" class="form-control">
@@ -29,34 +29,25 @@
         </div>
         <div class="col-auto d-flex gap-2">
           <button class="btn btn-primary" type="submit">Terapkan</button>
-          <a href="{{ route('admin.employees.index') }}" class="btn btn-light">Reset</a>
+          <a href="{{ route('admin.employees.index') }}" class="btn btn-light" data-dt-reset>Reset</a>
         </div>
       </form>
     </div>
   </div>
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Pegawai</th><th>Jenis</th><th>Penempatan</th><th>Status</th><th class="text-end">Tindakan</th></tr></thead>
-        <tbody>
-          @forelse($employees as $employee)
-            @php($current = $employee->assignments->first(fn ($a) => $a->end_date === null || $a->end_date->gte(today())))
-            <tr>
-              <td><div class="fw-semibold">{{ $employee->name }}</div><div class="small text-secondary">{{ $employee->employee_number }}</div></td>
-              <td>{{ $employee->typeLabel() }}</td>
-              <td>{{ $current?->unit?->name ?? '—' }}</td>
-              <td><span class="badge {{ $employee->status->badge() }}">{{ $employee->status->label() }}</span></td>
-              <td class="text-end text-nowrap">
-                <a href="{{ route('admin.employees.show', $employee) }}" class="btn btn-sm btn-outline-secondary">Detail</a>
-                @can('employees.update')<a href="{{ route('admin.employees.edit', $employee) }}" class="btn btn-sm btn-outline-primary"><x-icon name="edit" size="14" class="me-1"/>Ubah</a>@endcan
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="5" class="empty-state py-5">Belum ada pegawai pada cakupan Anda.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($employees->hasPages()) <div class="card-footer bg-transparent">{{ $employees->links() }}</div> @endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblEmployees',
+      'url' => route('admin.employees.index'),
+      'filter' => '#employeeFilter',
+      'order' => [[0, 'asc']],
+      'empty' => 'Belum ada pegawai pada cakupan Anda.',
+      'columns' => [
+        ['data' => 'name', 'title' => 'Pegawai'],
+        ['data' => 'employee_type', 'title' => 'Jenis', 'searchable' => false],
+        ['data' => 'placement', 'title' => 'Penempatan', 'orderable' => false, 'searchable' => false],
+        ['data' => 'status', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
 @endsection

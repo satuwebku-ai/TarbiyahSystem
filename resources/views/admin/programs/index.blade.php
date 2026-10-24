@@ -8,7 +8,7 @@
 @section('content')
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.programs.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="programFilter" action="{{ route('admin.programs.index') }}" class="row g-2 align-items-end">
         <div class="col-md-4">
           <label for="q" class="form-label small mb-1">Cari program / kode</label>
           <input id="q" name="q" value="{{ $filters['q'] ?? '' }}" class="form-control">
@@ -33,44 +33,27 @@
         </div>
         <div class="col-auto d-flex gap-2">
           <button class="btn btn-primary" type="submit">Terapkan</button>
-          <a href="{{ route('admin.programs.index') }}" class="btn btn-light">Reset</a>
+          <a href="{{ route('admin.programs.index') }}" class="btn btn-light" data-dt-reset>Reset</a>
         </div>
       </form>
     </div>
   </div>
 
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead>
-          <tr><th>Program</th><th>Unit</th><th>Periode</th><th>Kegiatan</th><th>Status</th><th class="text-end">Aksi</th></tr>
-        </thead>
-        <tbody>
-          @forelse($programs as $program)
-            <tr>
-              <td>
-                <div class="fw-semibold">{{ $program->title }}</div>
-                <div class="small text-secondary">{{ $program->code }}</div>
-              </td>
-              <td>{{ $program->unit?->name ?? '—' }}</td>
-              <td class="text-nowrap">{{ $program->start_date->format('d M Y') }} – {{ $program->end_date->format('d M Y') }}</td>
-              <td>{{ $program->activities_count }}</td>
-              <td><span class="badge text-bg-{{ $program->status === 'approved' ? 'success' : ($program->status === 'submitted' ? 'warning' : ($program->status === 'rejected' ? 'danger' : 'secondary')) }}">{{ \App\Models\WorkProgram::STATUSES[$program->status] ?? $program->status }}</span></td>
-              <td class="text-end text-nowrap">
-                <a href="{{ route('admin.programs.show', $program) }}" class="btn btn-sm btn-outline-secondary">Detail</a>
-                @if(in_array($program->status, ['draft', 'rejected'], true))
-                  @can('programs.manage')
-                    <a href="{{ route('admin.programs.edit', $program) }}" class="btn btn-sm btn-outline-primary">Ubah</a>
-                  @endcan
-                @endif
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="6" class="text-center text-secondary py-5">Belum ada program kerja pada cakupan Anda.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($programs->hasPages()) <div class="card-footer bg-transparent">{{ $programs->links() }}</div> @endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblPrograms',
+      'url' => route('admin.programs.index'),
+      'filter' => '#programFilter',
+      'order' => [[2, 'desc']],
+      'empty' => 'Belum ada program kerja pada cakupan Anda.',
+      'columns' => [
+        ['data' => 'title', 'title' => 'Program'],
+        ['data' => 'unit_name', 'title' => 'Unit'],
+        ['data' => 'start_date', 'title' => 'Periode', 'searchable' => false],
+        ['data' => 'activities_count', 'title' => 'Kegiatan', 'searchable' => false],
+        ['data' => 'status', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'action', 'title' => 'Aksi', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
 @endsection

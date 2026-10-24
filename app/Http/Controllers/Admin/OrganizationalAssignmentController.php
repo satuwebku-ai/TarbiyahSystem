@@ -20,18 +20,22 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class OrganizationalAssignmentController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access): View
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
     {
         $visibleIds = $access->visibleUnitIds(auth('admin')->user());
         $visibleUnits = $this->visibleUnits($visibleIds);
         $visibleById = $visibleUnits->keyBy('id');
         $view = $request->query('view') === 'table' ? 'table' : 'tree';
         $status = in_array($request->query('status'), ['active', 'ended'], true) ? $request->query('status') : null;
-        $search = mb_strtolower(trim((string) $request->query('search')));
+        $rawSearch = $request->query('search');
+        $search = is_string($rawSearch) ? mb_strtolower(trim($rawSearch)) : '';
 
         // Unit terpilih berlaku untuk unit itu beserta turunannya, sama seperti bagan jabatan.
         $selectedUnitId = $request->integer('unit_id') ?: null;
@@ -48,22 +52,34 @@ class OrganizationalAssignmentController extends Controller
             'view' => $view,
             'unitOptions' => $this->unitOptions($visibleUnits, $visibleById),
             'selectedUnitId' => $selectedUnitId,
-            'filters' => ['status' => $status, 'search' => $request->query('search')],
+            'filters' => ['status' => $status, 'search' => is_string($rawSearch) ? $rawSearch : ''],
         ];
 
         if ($view === 'table') {
             $query = OrganizationalAssignment::query()
                 ->with(['unit:id,name,code', 'position:id,name', 'admin:id,name,username', 'employee:id,name,employee_number'])
                 ->whereIn('organizational_unit_id', $unitIds)
-                ->when($status, fn ($q) => $q->where('status', $status))
-                ->when($search !== '', fn ($q) => $q->where(fn ($inner) => $inner
-                    ->whereRaw('LOWER(assignee_name) LIKE ?', ['%'.$search.'%'])
-                    ->orWhereHas('position', fn ($p) => $p->whereRaw('LOWER(name) LIKE ?', ['%'.$search.'%']))))
-                ->orderByDesc('start_date');
+                ->when($status, fn ($q) => $q->where('status', $status));
 
-            return view('admin.organization.assignments.index', $common + [
-                'assignments' => $query->paginate(25)->withQueryString(),
-            ]);
+            if (Dt::wants($request)) {
+                return DataTables::eloquent($query->reorder())
+                    ->editColumn('assignee_name', fn (OrganizationalAssignment $a) => '<div class="fw-semibold">'.e($a->assignee_name).'</div>'
+                        .'<div class="small text-secondary">'.e($a->employee?->employee_number ?: 'Belum terhubung ke data pegawai')
+                        .' · '.e($a->admin ? '@'.($a->admin->username ?: $a->admin->name) : 'Tanpa akun pengelola').'</div>')
+                    ->addColumn('position_name', fn (OrganizationalAssignment $a) => e($a->position?->name))
+                    ->addColumn('unit_name', fn (OrganizationalAssignment $a) => e($a->unit?->name))
+                    ->editColumn('start_date', fn (OrganizationalAssignment $a) => '<span class="text-nowrap">'.e($a->start_date?->format('d M Y')).' — '.e($a->end_date?->format('d M Y') ?? 'sekarang').'</span>')
+                    ->editColumn('status', fn (OrganizationalAssignment $a) => Dt::badge($a->status === 'active', 'Aktif', 'Selesai'))
+                    ->addColumn('action', fn (OrganizationalAssignment $a) => view('admin.organization.assignments._actions', ['assignment' => $a])->render())
+                    ->orderColumn('position_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_positions', 'organizational_position_id', 'organizational_assignments'))
+                    ->orderColumn('unit_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'organizational_unit_id', 'organizational_assignments'))
+                    ->filterColumn('position_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_position_id', 'organizational_positions', ['name'], $kw))
+                    ->filterColumn('unit_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_unit_id', 'organizational_units', ['name', 'code'], $kw))
+                    ->rawColumns(['assignee_name', 'position_name', 'unit_name', 'start_date', 'status', 'action'])
+                    ->make(true);
+            }
+
+            return view('admin.organization.assignments.index', $common);
         }
 
         $assignments = OrganizationalAssignment::query()

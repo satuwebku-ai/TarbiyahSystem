@@ -15,11 +15,14 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class SchoolController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access): View
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
     {
         $visibleIds = $access->visibleUnitIds($request->user('admin'));
         $canViewStudents = $request->user('admin')->can('education.students.view');
@@ -47,8 +50,31 @@ class SchoolController extends Controller
             $query->where('school_level_id', $levelId);
         }
 
+        if (Dt::wants($request)) {
+            $dt = DataTables::eloquent($query->reorder())
+                ->addColumn('unit_name', fn (School $s) => '<div class="fw-semibold">'.e($s->unit?->name ?? '—').'</div>'
+                    .'<div class="small text-secondary">'.e($s->unit?->code).' · NPSN '.e($s->npsn ?: 'belum diisi').'</div>')
+                ->addColumn('level_name', fn (School $s) => e($s->level?->name ?? '—'))
+                ->addColumn('komda_name', fn (School $s) => e($s->unit?->parent?->name ?? '—'))
+                ->editColumn('status', fn (School $s) => '<span class="badge text-bg-'.($s->status === 'active' ? 'success' : 'secondary').'">'.e(School::STATUSES[$s->status] ?? $s->status).'</span>')
+                ->addColumn('action', fn (School $s) => view('admin.academic.schools._actions', ['school' => $s])->render())
+                ->orderColumn('unit_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'organizational_unit_id', 'schools'))
+                ->orderColumn('level_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'school_levels', 'school_level_id', 'schools'))
+                ->orderColumn('komda_name', fn ($q, $dir) => $q->orderBy(
+                    \Illuminate\Support\Facades\DB::table('organizational_units as u')->join('organizational_units as p', 'p.id', '=', 'u.parent_id')
+                        ->select('p.name')->whereColumn('u.id', 'schools.organizational_unit_id')->limit(1), $dir === 'desc' ? 'desc' : 'asc'))
+                ->filterColumn('unit_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_unit_id', 'organizational_units', ['name', 'code'], $kw))
+                ->filterColumn('level_name', fn ($q, $kw) => Dt::filterRelated($q, 'school_level_id', 'school_levels', ['name'], $kw))
+                ->filterColumn('komda_name', fn ($q, $kw) => $q->whereIn('organizational_unit_id', fn ($s) => $s->select('id')->from('organizational_units')
+                    ->whereIn('parent_id', fn ($p) => $p->select('id')->from('organizational_units')->where('name', 'like', "%{$kw}%"))));
+            if ($canViewStudents) {
+                $dt->editColumn('students_count', fn (School $s) => Dt::num($s->students_count));
+            }
+
+            return $dt->rawColumns(['unit_name', 'level_name', 'komda_name', 'status', 'action'])->make(true);
+        }
+
         return view('admin.academic.schools.index', [
-            'schools' => $query->orderBy('organizational_unit_id')->paginate(20)->withQueryString(),
             'levels' => SchoolLevel::query()->where('is_active', true)->orderBy('sort_order')->get(),
             'filters' => $filters,
             'canViewStudents' => $canViewStudents,

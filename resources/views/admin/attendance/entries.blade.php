@@ -7,14 +7,14 @@
   @if($errors->any())<div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>@endif
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.attendance.entries.index') }}" class="row g-2 align-items-end" id="entries-filter" data-ajax-filter>
+      <form method="GET" action="{{ route('admin.attendance.entries.index') }}" class="row g-2 align-items-end" id="entries-filter">
         @include('partials.admin.school-filter', [
           'scope' => $scope,
           'selected' => ['komwil' => $filters['komwil'] ?? '', 'komda' => $filters['komda'] ?? '', 'school' => $filters['school'] ?? ''],
           'cols' => ['komwil' => 'col-md-3', 'komda' => 'col-md-3', 'school' => 'col-md-4'],
           'allLabel' => 'Semua sekolah / unit dalam cakupan',
         ])
-        <div class="col-auto d-flex gap-2"><button class="btn btn-outline-primary" type="submit">Saring riwayat</button><a href="{{ route('admin.attendance.entries.index') }}" class="btn btn-light">Reset</a></div>
+        <div class="col-auto d-flex gap-2"><button class="btn btn-outline-primary" type="submit">Saring riwayat</button><a href="{{ route('admin.attendance.entries.index') }}" class="btn btn-light" data-dt-reset>Reset</a></div>
         <div class="col-12 form-text mt-1">Pilihan KOMWIL → KOMDA → Sekolah juga mempersempit daftar pegawai pada formulir di bawah.</div>
       </form>
     </div>
@@ -45,33 +45,23 @@
     </div>
   </div>
 
-  <div data-ajax-region>
-  @fragment('table')
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table align-middle mb-0">
-        <thead><tr><th>Tanggal</th><th>Pegawai</th><th>Status</th><th>Catatan</th><th class="text-end">Tindakan</th></tr></thead>
-        <tbody>
-          @forelse($entries as $r)
-            <tr>
-              <td class="text-nowrap">{{ $r->attendance_date->format('d M Y') }}</td>
-              <td><div class="fw-semibold">{{ $r->employee->name }}</div><div class="small text-secondary">{{ $r->unit?->name }}</div></td>
-              <td><span class="badge {{ $r->status->badge() }}">{{ $r->status->label() }}</span></td>
-              <td>{{ $r->notes ?: '—' }}</td>
-              <td class="text-end"><form method="POST" action="{{ route('admin.attendance.entries.destroy', $r) }}" onsubmit="return confirm('Hapus catatan ini?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit"><x-icon name="trash" size="14"/></button></form></td>
-            </tr>
-          @empty
-            <tr><td colspan="5" class="empty-state py-5">Belum ada catatan.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($entries->hasPages())<div class="card-footer bg-transparent">{{ $entries->links() }}</div>@endif
-  </div>
-  @endfragment
+    @include('partials.admin.datatable', [
+      'id' => 'tblEntries',
+      'url' => route('admin.attendance.entries.index'),
+      'filter' => '#entries-filter',
+      'order' => [[0, 'desc']],
+      'empty' => 'Belum ada catatan.',
+      'columns' => [
+        ['data' => 'attendance_date', 'title' => 'Tanggal', 'searchable' => false],
+        ['data' => 'employee_name', 'title' => 'Pegawai'],
+        ['data' => 'status', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'notes', 'title' => 'Catatan'],
+        ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
   @push('scripts')
     @include('partials.admin.school-classroom-sync')
-    @include('partials.admin.ajax-table')
   @endpush
 @endsection

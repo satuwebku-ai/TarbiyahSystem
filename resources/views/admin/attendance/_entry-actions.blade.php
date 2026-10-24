@@ -1,0 +1,1 @@
+<form method="POST" action="{{ route('admin.attendance.entries.destroy', $r) }}" data-confirm="Hapus catatan ini?">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit"><x-icon name="trash" size="14"/></button></form>

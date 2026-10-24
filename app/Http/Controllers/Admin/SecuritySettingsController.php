@@ -8,7 +8,10 @@ use App\Models\AdminSecuritySetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class SecuritySettingsController extends Controller
 {
@@ -57,10 +60,19 @@ class SecuritySettingsController extends Controller
         return back()->with('success', $changed ? 'Kebijakan keamanan disimpan.' : 'Tidak ada perubahan pada kebijakan keamanan.');
     }
 
-    public function activity(): View
+    public function activity(Request $request): View|JsonResponse
     {
-        return view('admin.security.activity', [
-            'entries' => AdminAuditLog::query()->with('actor')->latest('created_at')->paginate(25),
-        ]);
+        if (Dt::wants($request)) {
+            return DataTables::eloquent(AdminAuditLog::query()->with('actor'))
+                ->editColumn('created_at', fn (AdminAuditLog $e) => '<span class="text-nowrap small">'.e($e->created_at?->format('d M Y H:i:s') ?? '—').'</span>')
+                ->addColumn('event', fn (AdminAuditLog $e) => view('admin.security._activity-cell', ['col' => 'event', 'entry' => $e])->render())
+                ->editColumn('actor_name', fn (AdminAuditLog $e) => view('admin.security._activity-cell', ['col' => 'actor_name', 'entry' => $e])->render())
+                ->editColumn('subject_type', fn (AdminAuditLog $e) => '<span class="small">'.e($e->subject_type ? $e->subject_type.' #'.$e->subject_id : '—').'</span>')
+                ->editColumn('ip_address', fn (AdminAuditLog $e) => '<span class="text-nowrap small">'.e($e->ip_address ?: '—').'</span>')
+                ->rawColumns(['created_at', 'event', 'actor_name', 'subject_type', 'ip_address'])
+                ->make(true);
+        }
+
+        return view('admin.security.activity');
     }
 }

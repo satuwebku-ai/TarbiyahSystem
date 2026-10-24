@@ -18,6 +18,8 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 /** Kelola akun pengelola + penetapan role. */
 class AdminController extends Controller implements HasMiddleware
@@ -32,20 +34,32 @@ class AdminController extends Controller implements HasMiddleware
         ];
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $admins = Admin::with('roles')->orderBy('id')->paginate(15);
+        if (Dt::wants($request)) {
+            // Nama unit yang ditetapkan per akun (kolom "Cakupan unit" di daftar).
+            $unitNames = UserUnitAccess::query()
+                ->where('model_type', Admin::class)
+                ->with('unit:id,name')
+                ->get()
+                ->groupBy('model_id')
+                ->map(fn ($rows) => $rows->pluck('unit.name')->filter()->sort()->values()->all());
+            $me = $request->user('admin');
 
-        // Nama unit yang ditetapkan per akun (kolom "Cakupan unit" di daftar).
-        $unitNames = UserUnitAccess::query()
-            ->where('model_type', Admin::class)
-            ->whereIn('model_id', $admins->pluck('id'))
-            ->with('unit:id,name')
-            ->get()
-            ->groupBy('model_id')
-            ->map(fn ($rows) => $rows->pluck('unit.name')->filter()->sort()->values()->all());
+            return DataTables::eloquent(Admin::query()->with('roles'))
+                ->editColumn('name', fn (Admin $a) => view('admin.admins._name', ['a' => $a])->render())
+                ->addColumn('roles', fn (Admin $a) => $a->roles->isEmpty() ? '<span class="text-secondary">—</span>'
+                    : $a->roles->map(fn ($r) => '<span class="badge badge-soft-primary">'.e($r->label).'</span>')->implode(' '))
+                ->addColumn('scope', fn (Admin $a) => view('admin.admins._scope', ['a' => $a, 'names' => $unitNames[$a->id] ?? []])->render())
+                ->editColumn('is_active', fn (Admin $a) => Dt::badge((bool) $a->is_active))
+                ->editColumn('last_login_at', fn (Admin $a) => '<span class="small">'.e($a->last_login_at?->format('d M Y H:i') ?? '—').'</span>')
+                ->addColumn('action', fn (Admin $a) => view('admin.admins._actions', ['a' => $a, 'me' => $me])->render())
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('username', 'like', "%{$kw}%")->orWhere('email', 'like', "%{$kw}%")))
+                ->rawColumns(['name', 'roles', 'scope', 'is_active', 'last_login_at', 'action'])
+                ->make(true);
+        }
 
-        return view('admin.admins.index', ['admins' => $admins, 'unitNames' => $unitNames]);
+        return view('admin.admins.index');
     }
 
     public function create()

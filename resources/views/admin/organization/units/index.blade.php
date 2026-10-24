@@ -9,8 +9,9 @@
   <div class="mb-3">@include('admin.organization.partials.setup-steps', ['active' => 'units', 'compact' => true])</div>
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.organization.units.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="unitFilter" action="{{ route('admin.organization.units.index') }}" class="row g-2 align-items-end">
         <input type="hidden" name="view" value="{{ $view }}">
+        @if ($view === 'tree')
         <div class="col-lg-5">
           <label for="search" class="form-label small mb-1">Cari unit</label>
           <div class="input-group">
@@ -18,6 +19,7 @@
             <input id="search" name="search" value="{{ $filters['search'] ?? '' }}" class="form-control" placeholder="Nama atau kode unit">
           </div>
         </div>
+        @endif
         <div class="col-sm-5 col-lg-3">
           <label for="type_id" class="form-label small mb-1">Jenis unit</label>
           <select id="type_id" name="type_id" class="form-select">
@@ -59,35 +61,22 @@
 
   @if ($view === 'table')
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Unit</th><th>Jenis</th><th>Unit induk</th><th>Turunan</th><th>Jabatan</th><th>Status</th><th class="text-end">Tindakan</th></tr></thead>
-        <tbody>
-          @forelse($units as $unit)
-            <tr>
-              <td><div class="fw-semibold">{{ $unit->name }}</div><div class="small text-secondary"><code>{{ $unit->code }}</code></div></td>
-              <td>{{ $unit->type?->name ?? '—' }}</td>
-              <td>{{ $unit->parent?->name ?? 'Unit induk' }}</td>
-              <td>{{ number_format($unit->children_count, 0, ',', '.') }}</td>
-              <td>{{ number_format($unit->positions_count, 0, ',', '.') }}</td>
-              <td><span class="badge {{ $unit->status === 'active' ? 'badge-soft-success' : 'badge-soft-secondary' }}">{{ $unit->status === 'active' ? 'Aktif' : 'Nonaktif' }}</span></td>
-              <td class="text-end text-nowrap">
-                <a href="{{ route('admin.organization.units.show', $unit) }}" class="btn btn-sm btn-outline-secondary">Detail</a>
-                @can('organization.units.manage')
-                  <a href="{{ route('admin.organization.units.edit', $unit) }}" class="btn btn-sm btn-outline-primary"><x-icon name="edit" size="14" class="me-1"/>Ubah</a>
-                @endcan
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="7" class="empty-state py-5">
-              <div class="fw-semibold">Tidak ada unit ditemukan</div>
-              <div class="small text-secondary mt-1">Ubah filter atau buat unit organisasi baru.</div>
-            </td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($units->hasPages()) <div class="card-footer bg-transparent">{{ $units->links() }}</div> @endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblUnits',
+      'url' => route('admin.organization.units.index'),
+      'filter' => '#unitFilter',
+      'order' => [[0, 'asc']],
+      'empty' => 'Tidak ada unit ditemukan. Ubah filter atau buat unit organisasi baru.',
+      'columns' => [
+        ['data' => 'name', 'title' => 'Unit'],
+        ['data' => 'type_name', 'title' => 'Jenis'],
+        ['data' => 'parent_name', 'title' => 'Unit induk'],
+        ['data' => 'children_count', 'title' => 'Turunan', 'searchable' => false],
+        ['data' => 'positions_count', 'title' => 'Jabatan', 'searchable' => false],
+        ['data' => 'status', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
   @else
   <div class="card border-0 shadow-sm">
@@ -118,7 +107,9 @@
   </div>
   @endif
 
-  @include('admin.organization.partials.add-unit-modal')
+  @if ($view === 'tree')
+    @include('admin.organization.partials.add-unit-modal')
+  @endif
 @endsection
 
 @push('scripts')

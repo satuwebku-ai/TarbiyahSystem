@@ -13,11 +13,14 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class OrganizationalPositionController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access): View
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
     {
         $visibleIds = $access->visibleUnitIds(auth('admin')->user());
 
@@ -37,9 +40,22 @@ class OrganizationalPositionController extends Controller
             $query->where('organizational_unit_id', $unitId);
         }
 
+        if (Dt::wants($request)) {
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('name', fn (OrganizationalPosition $p) => Dt::stack($p->name, $p->description))
+                ->addColumn('unit_name', fn (OrganizationalPosition $p) => e($p->unit?->name).' <span class="small text-secondary">('.e($p->unit?->code).')</span>')
+                ->editColumn('assignments_count', fn (OrganizationalPosition $p) => Dt::num($p->assignments_count))
+                ->editColumn('is_active', fn (OrganizationalPosition $p) => Dt::badge($p->is_active))
+                ->addColumn('action', fn (OrganizationalPosition $p) => view('admin.organization.positions._actions', ['position' => $p])->render())
+                ->orderColumn('unit_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'organizational_unit_id', 'organizational_positions'))
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('description', 'like', "%{$kw}%")))
+                ->filterColumn('unit_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_unit_id', 'organizational_units', ['name', 'code'], $kw))
+                ->rawColumns(['name', 'unit_name', 'is_active', 'action'])
+                ->make(true);
+        }
+
         return view('admin.organization.positions.index', [
             'view' => 'table',
-            'positions' => $query->paginate(25)->withQueryString(),
             'units' => $this->availableUnits($access),
             'unitOptions' => $this->treeOptions($this->availableUnits($access)),
             'selectedUnitId' => $request->integer('unit_id') ?: null,

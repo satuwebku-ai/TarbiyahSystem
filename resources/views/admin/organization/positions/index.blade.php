@@ -9,7 +9,7 @@
   <div class="mb-3">@include('admin.organization.partials.setup-steps', ['active' => 'positions', 'compact' => true])</div>
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.organization.positions.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="positionFilter" action="{{ route('admin.organization.positions.index') }}" class="row g-2 align-items-end">
         <input type="hidden" name="view" value="{{ $view }}">
         <div class="col-md-5">
           <label for="unit_id" class="form-label small mb-1">Filter unit</label>
@@ -50,31 +50,20 @@
 
   @if ($view === 'table')
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Jabatan</th><th>Unit</th><th>Penugasan</th><th>Status</th><th class="text-end">Tindakan</th></tr></thead>
-        <tbody>
-          @forelse($positions as $position)
-            <tr>
-              <td><div class="fw-semibold">{{ $position->name }}</div><div class="small text-secondary">{{ $position->description ?: '—' }}</div></td>
-              <td>{{ $position->unit?->name }} <span class="small text-secondary">({{ $position->unit?->code }})</span></td>
-              <td>{{ number_format($position->assignments_count, 0, ',', '.') }}</td>
-              <td><span class="badge {{ $position->is_active ? 'badge-soft-success' : 'badge-soft-secondary' }}">{{ $position->is_active ? 'Aktif' : 'Nonaktif' }}</span></td>
-              <td class="text-end text-nowrap">
-                <a href="{{ route('admin.organization.positions.edit', $position) }}" class="btn btn-sm btn-outline-primary"><x-icon name="edit" size="14" class="me-1"/>Ubah</a>
-                <form method="POST" action="{{ route('admin.organization.positions.toggle', $position) }}" class="d-inline">
-                  @csrf @method('PATCH')
-                  <button type="submit" class="btn btn-sm {{ $position->is_active ? 'btn-outline-warning' : 'btn-outline-success' }}">{{ $position->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</button>
-                </form>
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="5" class="empty-state py-5">Belum ada jabatan di unit yang dapat Anda akses.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($positions->hasPages()) <div class="card-footer bg-transparent">{{ $positions->links() }}</div> @endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblPositions',
+      'url' => route('admin.organization.positions.index'),
+      'filter' => '#positionFilter',
+      'order' => [[0, 'asc']],
+      'empty' => 'Belum ada jabatan di unit yang dapat Anda akses.',
+      'columns' => [
+        ['data' => 'name', 'title' => 'Jabatan'],
+        ['data' => 'unit_name', 'title' => 'Unit'],
+        ['data' => 'assignments_count', 'title' => 'Penugasan', 'searchable' => false],
+        ['data' => 'is_active', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
   @else
   <div class="card border-0 shadow-sm">

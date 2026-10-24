@@ -20,11 +20,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class EmployeeController extends Controller
 {
-    public function index(Request $request, EmployeeAccess $access, OrganizationAccess $org): View
+    public function index(Request $request, EmployeeAccess $access, OrganizationAccess $org): View|JsonResponse
     {
         $admin = $request->user('admin');
         $unitId = $request->integer('unit_id') ?: null;
@@ -38,11 +41,25 @@ class EmployeeController extends Controller
             ->when($status, fn ($query) => $query->where('status', $status->value))
             ->when($unitId, fn ($query) => $query->whereHas('assignments', fn ($a) => $a
                 ->whereIn('organizational_unit_id', $org->withDescendants([$unitId]))))
-            ->orderBy('name')
-            ->paginate(25)->withQueryString();
+            ;
+
+        if (Dt::wants($request)) {
+            return DataTables::eloquent($employees->reorder())
+                ->editColumn('name', fn (Employee $e) => Dt::stack($e->name, $e->employee_number))
+                ->editColumn('employee_type', fn (Employee $e) => e($e->typeLabel()))
+                ->addColumn('placement', function (Employee $e) {
+                    $current = $e->assignments->first(fn ($a) => $a->end_date === null || $a->end_date->gte(today()));
+
+                    return e($current?->unit?->name ?? '—');
+                })
+                ->editColumn('status', fn (Employee $e) => '<span class="badge '.e($e->status->badge()).'">'.e($e->status->label()).'</span>')
+                ->addColumn('action', fn (Employee $e) => view('admin.employees._actions', ['employee' => $e])->render())
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('employee_number', 'like', "%{$kw}%")))
+                ->rawColumns(['name', 'placement', 'status', 'action'])
+                ->make(true);
+        }
 
         return view('admin.employees.index', [
-            'employees' => $employees,
             'units' => $access->availableUnits($admin),
             'statuses' => EmployeeStatus::cases(),
             'filters' => ['q' => $q, 'status' => $status?->value, 'unit_id' => $unitId],

@@ -9,7 +9,7 @@
   @include('partials.admin.select2-assets')
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.academic.students.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="studentFilter" action="{{ route('admin.academic.students.index') }}" class="row g-2 align-items-end">
         <div class="col-md-3">
           <label for="q" class="form-label small mb-1">Cari nama, NIS, atau NISN</label>
           <input id="q" name="q" value="{{ $filters['q'] ?? '' }}" class="form-control">
@@ -30,37 +30,27 @@
         </div>
         <div class="col-auto d-flex gap-2">
           <button class="btn btn-primary" type="submit">Cari</button>
-          <a href="{{ route('admin.academic.students.index') }}" class="btn btn-light">Reset</a>
+          <a href="{{ route('admin.academic.students.index') }}" class="btn btn-light" data-dt-reset>Reset</a>
         </div>
       </form>
     </div>
   </div>
 
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Siswa</th><th>Sekolah</th><th>Jenjang</th><th>Status</th><th class="text-end">Aksi</th></tr></thead>
-        <tbody>
-          @forelse($students as $student)
-            <tr>
-              <td><div class="fw-semibold">{{ $student->name }}</div><div class="small text-secondary">NIS {{ $student->nis }} · NISN {{ $student->nisn ?: '—' }}</div></td>
-              <td>{{ $student->school?->unit?->name ?? '—' }}</td>
-              <td>{{ $student->school?->level?->name ?? '—' }}</td>
-              <td><span class="badge text-bg-{{ $student->status === 'active' ? 'success' : 'secondary' }}">{{ $statuses[$student->status] ?? $student->status }}</span></td>
-              <td class="text-end text-nowrap">
-                <a href="{{ route('admin.academic.students.show', $student) }}" class="btn btn-sm btn-outline-secondary">Detail</a>
-                @can('education.students.manage')
-                  <a href="{{ route('admin.academic.students.edit', $student) }}" class="btn btn-sm btn-outline-primary">Ubah</a>
-                @endcan
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="5" class="text-center text-secondary py-5">Belum ada siswa pada cakupan Anda.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($students->hasPages()) <div class="card-footer bg-transparent">{{ $students->links() }}</div> @endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblStudents',
+      'url' => route('admin.academic.students.index'),
+      'filter' => '#studentFilter',
+      'order' => [[0, 'asc']],
+      'empty' => 'Belum ada siswa pada cakupan Anda.',
+      'columns' => [
+        ['data' => 'name', 'title' => 'Siswa'],
+        ['data' => 'school_name', 'title' => 'Sekolah'],
+        ['data' => 'level_name', 'title' => 'Jenjang'],
+        ['data' => 'status', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'action', 'title' => 'Aksi', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
   @push('scripts')
     @include('partials.admin.school-classroom-sync')

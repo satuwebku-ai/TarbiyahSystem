@@ -24,7 +24,7 @@
   </div>
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.attendance.holidays.index') }}" class="row g-2 align-items-end" data-ajax-filter>
+      <form method="GET" action="{{ route('admin.attendance.holidays.index') }}" class="row g-2 align-items-end" id="holidayFilter">
         <div class="col-md-2"><label class="form-label small mb-1" for="year">Tahun</label><input id="year" type="number" name="year" value="{{ $year }}" class="form-control"></div>
         @include('partials.admin.school-filter', [
           'scope' => $scope,
@@ -32,32 +32,27 @@
           'cols' => ['komwil' => 'col-md-3', 'komda' => 'col-md-3', 'school' => 'col-md-4'],
           'allLabel' => 'Semua sekolah / unit dalam cakupan',
         ])
-        <div class="col-auto d-flex gap-2"><button class="btn btn-primary" type="submit">Tampilkan</button><a href="{{ route('admin.attendance.holidays.index') }}" class="btn btn-light">Reset</a></div>
+        <div class="col-auto d-flex gap-2"><button class="btn btn-primary" type="submit">Tampilkan</button><a href="{{ route('admin.attendance.holidays.index') }}" class="btn btn-light" data-dt-reset>Reset</a></div>
         <div class="col-12 form-text mt-1">Dengan filter wilayah/sekolah, daftar memuat libur umum serta libur yang berlaku pada unit terpilih.</div>
       </form>
     </div>
   </div>
-  <div data-ajax-region>
-  @fragment('table')
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table align-middle mb-0">
-        <thead><tr><th>Tanggal</th><th>Nama</th><th>Berlaku untuk</th><th class="text-end">Tindakan</th></tr></thead>
-        <tbody>
-          @forelse($holidays as $h)
-            <tr><td class="text-nowrap">{{ $h->holiday_date->format('d M Y') }}</td><td>{{ $h->name }}</td><td>{{ $h->unit?->name ?? 'Seluruh organisasi' }}</td>
-              <td class="text-end"><form method="POST" action="{{ route('admin.attendance.holidays.destroy', $h) }}" onsubmit="return confirm('Hapus hari libur ini?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit"><x-icon name="trash" size="14"/></button></form></td></tr>
-          @empty
-            <tr><td colspan="4" class="empty-state py-5">Belum ada hari libur pada {{ $year }}.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-  </div>
-  @endfragment
+    @include('partials.admin.datatable', [
+      'id' => 'tblHolidays',
+      'url' => route('admin.attendance.holidays.index'),
+      'filter' => '#holidayFilter',
+      'order' => [[0, 'asc']],
+      'empty' => 'Belum ada hari libur pada tahun ini.',
+      'columns' => [
+        ['data' => 'holiday_date', 'title' => 'Tanggal', 'searchable' => false],
+        ['data' => 'name', 'title' => 'Nama'],
+        ['data' => 'unit_name', 'title' => 'Berlaku untuk'],
+        ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
   @push('scripts')
     @include('partials.admin.school-classroom-sync')
-    @include('partials.admin.ajax-table')
   @endpush
 @endsection

@@ -11,30 +11,18 @@
       <div class="fw-semibold">Jenis pegawai</div>
       <div class="small text-secondary">Contoh: Guru, Tenaga kependidikan, Satpam, Pengurus. Nonaktifkan jenis yang tidak dipakai; pegawai lama tetap tersimpan.</div>
     </div>
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Nama</th><th>Kode</th><th>Jumlah pegawai</th><th>Status</th><th class="text-end">Tindakan</th></tr></thead>
-        <tbody>
-          @forelse ($types as $type)
-            <tr>
-              <td><div class="fw-semibold">{{ $type->name }}</div><div class="small text-secondary">{{ $type->description ?: '—' }}</div></td>
-              <td><code>{{ $type->code }}</code></td>
-              <td>{{ number_format($counts[$type->code] ?? 0, 0, ',', '.') }}</td>
-              <td><span class="badge {{ $type->is_active ? 'badge-soft-success' : 'badge-soft-secondary' }}">{{ $type->is_active ? 'Aktif' : 'Nonaktif' }}</span></td>
-              <td class="text-end text-nowrap">
-                <a href="{{ route('admin.employees.types.edit', $type) }}" class="btn btn-sm btn-outline-secondary"><x-icon name="edit" size="14" class="me-1"/>Ubah</a>
-                <form method="POST" action="{{ route('admin.employees.types.toggle', $type) }}" class="d-inline">
-                  @csrf @method('PATCH')
-                  <button class="btn btn-sm {{ $type->is_active ? 'btn-outline-warning' : 'btn-outline-success' }}" type="submit">{{ $type->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</button>
-                </form>
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="5" class="empty-state py-5">Belum ada jenis pegawai.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($types->hasPages()) <div class="card-footer bg-transparent">{{ $types->links() }}</div> @endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblEmployeeTypes',
+      'url' => route('admin.employees.types.index'),
+      'order' => [[0, 'asc']],
+      'empty' => 'Belum ada jenis pegawai.',
+      'columns' => [
+        ['data' => 'name', 'title' => 'Nama'],
+        ['data' => 'code', 'title' => 'Kode'],
+        ['data' => 'employees_total', 'title' => 'Jumlah pegawai', 'searchable' => false],
+        ['data' => 'is_active', 'title' => 'Status', 'searchable' => false],
+        ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],
+      ],
+    ])
   </div>
 @endsection

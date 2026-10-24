@@ -20,11 +20,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 
 class StudentController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access, SchoolScope $scope): View
+    public function index(Request $request, OrganizationAccess $access, SchoolScope $scope): View|JsonResponse
     {
         $admin = $request->user('admin');
         $filters = $request->only(['q', 'school_id', 'status', 'komwil_id', 'komda_id']);
@@ -55,8 +58,31 @@ class StudentController extends Controller
                 ->orWhere('nisn', 'like', "%{$search}%"));
         }
 
+        if (Dt::wants($request)) {
+            $statuses = Student::STATUSES;
+
+            return DataTables::eloquent($query->reorder())
+                ->editColumn('name', fn (Student $s) => '<div class="fw-semibold">'.e($s->name).'</div><div class="small text-secondary">NIS '.e($s->nis).' · NISN '.e($s->nisn ?: '—').'</div>')
+                ->addColumn('school_name', fn (Student $s) => e($s->school?->unit?->name ?? '—'))
+                ->addColumn('level_name', fn (Student $s) => e($s->school?->level?->name ?? '—'))
+                ->editColumn('status', fn (Student $s) => '<span class="badge text-bg-'.($s->status === 'active' ? 'success' : 'secondary').'">'.e($statuses[$s->status] ?? $s->status).'</span>')
+                ->addColumn('action', fn (Student $s) => view('admin.academic.students._actions', ['student' => $s])->render())
+                ->orderColumn('school_name', fn ($q, $dir) => $q->orderBy(
+                    DB::table('schools as sc')->join('organizational_units as ou', 'ou.id', '=', 'sc.organizational_unit_id')
+                        ->select('ou.name')->whereColumn('sc.id', 'students.school_id')->limit(1), $dir === 'desc' ? 'desc' : 'asc'))
+                ->orderColumn('level_name', fn ($q, $dir) => $q->orderBy(
+                    DB::table('schools as sc')->join('school_levels as sl', 'sl.id', '=', 'sc.school_level_id')
+                        ->select('sl.name')->whereColumn('sc.id', 'students.school_id')->limit(1), $dir === 'desc' ? 'desc' : 'asc'))
+                ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w->where('name', 'like', "%{$kw}%")->orWhere('nis', 'like', "%{$kw}%")->orWhere('nisn', 'like', "%{$kw}%")))
+                ->filterColumn('school_name', fn ($q, $kw) => $q->whereIn('school_id', fn ($sub) => $sub->select('id')->from('schools')
+                    ->whereIn('organizational_unit_id', fn ($u) => $u->select('id')->from('organizational_units')->where('name', 'like', "%{$kw}%"))))
+                ->filterColumn('level_name', fn ($q, $kw) => $q->whereIn('school_id', fn ($sub) => $sub->select('id')->from('schools')
+                    ->whereIn('school_level_id', fn ($l) => $l->select('id')->from('school_levels')->where('name', 'like', "%{$kw}%"))))
+                ->rawColumns(['name', 'school_name', 'level_name', 'status', 'action'])
+                ->make(true);
+        }
+
         return view('admin.academic.students.index', [
-            'students' => $query->orderBy('name')->paginate(20)->withQueryString(),
             'scope' => $scope->options($admin, activeOnly: true),
             'filters' => $filters,
             'statuses' => Student::STATUSES,

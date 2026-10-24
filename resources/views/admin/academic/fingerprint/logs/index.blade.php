@@ -12,7 +12,7 @@
 @section('content')
   <div class="card border-0 shadow-sm">
     <div class="card-body">
-      <form method="GET" action="{{ route('admin.academic.fingerprint.logs.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="logFilter" action="{{ route('admin.academic.fingerprint.logs.index') }}" class="row g-2 align-items-end">
         <div class="col-md-3"><label class="form-label small mb-1" for="school_id">Sekolah</label>
           <select id="school_id" name="school_id" class="form-select form-select-sm"><option value="">Semua</option>
             @foreach($schools as $s)<option value="{{ $s->id }}" @selected(($filters['school_id'] ?? '') == $s->id)>{{ $s->unit?->name }}</option>@endforeach</select></div>
@@ -25,7 +25,7 @@
         <div class="col-md-1"><label class="form-label small mb-1" for="pin">PIN</label><input id="pin" name="pin" value="{{ $filters['pin'] ?? '' }}" class="form-control form-control-sm"></div>
         <div class="col-md-2"><label class="form-label small mb-1" for="date_from">Dari</label><input id="date_from" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}" class="form-control form-control-sm"></div>
         <div class="col-md-2"><label class="form-label small mb-1" for="date_to">Sampai</label><input id="date_to" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" class="form-control form-control-sm"></div>
-        <div class="col-12 d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Tampilkan</button><a href="{{ route('admin.academic.fingerprint.logs.index') }}" class="btn btn-light btn-sm">Reset</a></div>
+        <div class="col-12 d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Tampilkan</button><a href="{{ route('admin.academic.fingerprint.logs.index') }}" class="btn btn-light btn-sm" data-dt-reset>Reset</a></div>
       </form>
     </div>
   </div>
@@ -43,24 +43,20 @@
   @endif
 
   <div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-      <table class="table align-middle mb-0">
-        <thead><tr><th>Waktu ketuk</th><th>PIN</th><th>Siswa</th><th>Mesin</th><th>Hasil</th></tr></thead>
-        <tbody>
-          @forelse($logs as $log)
-            <tr>
-              <td class="text-nowrap">{{ \App\Helpers\AttendanceClock::toLocal($log->punched_at)->format('d M Y H:i:s') }}</td>
-              <td>{{ $log->pin }}</td>
-              <td>@if($log->student)<div class="fw-semibold">{{ $log->student->name }}</div><div class="small text-secondary">NIS {{ $log->student->nis }}</div>@else<span class="text-secondary">—</span>@endif</td>
-              <td>{{ $log->device?->name }}<div class="small text-secondary">{{ $log->school?->unit?->name }}</div></td>
-              <td><span class="badge {{ $log->resultBadge() }}">{{ $log->resultLabel() }}</span>@if($log->note)<div class="small text-secondary">{{ $log->note }}</div>@endif</td>
-            </tr>
-          @empty
-            <tr><td colspan="5" class="empty-state py-5">Belum ada log ketukan.</td></tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-    @if($logs->hasPages())<div class="card-footer bg-transparent">{{ $logs->links() }}</div>@endif
+    @include('partials.admin.datatable', [
+      'id' => 'tblFingerprintLogs',
+      'url' => route('admin.academic.fingerprint.logs.index'),
+      'filter' => '#logFilter',
+      'order' => [[0, 'desc']],
+      'length' => 50,
+      'empty' => 'Belum ada log ketukan.',
+      'columns' => [
+        ['data' => 'punched_at', 'title' => 'Waktu ketuk', 'searchable' => false],
+        ['data' => 'pin', 'title' => 'PIN'],
+        ['data' => 'student_name', 'title' => 'Siswa'],
+        ['data' => 'device_name', 'title' => 'Mesin'],
+        ['data' => 'result', 'title' => 'Hasil', 'searchable' => false],
+      ],
+    ])
   </div>
 @endsection

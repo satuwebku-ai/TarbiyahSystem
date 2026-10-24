@@ -8,13 +8,16 @@ use App\Models\AttendanceCorrection;
 use App\Services\AttendanceService;
 use App\Services\EmployeeAccess;
 use App\Services\SchoolScope;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use App\Support\Dt;
+use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AttendanceCorrectionController extends Controller
 {
-    public function index(Request $request, EmployeeAccess $access, SchoolScope $schools): View|string
+    public function index(Request $request, EmployeeAccess $access, SchoolScope $schools): View|JsonResponse
     {
         $admin = $request->user('admin');
         $status = CorrectionStatus::tryFrom((string) $request->query('status')) ?? CorrectionStatus::Pending;
@@ -27,16 +30,26 @@ class AttendanceCorrectionController extends Controller
             ->with(['employee:id,name,employee_number', 'reviewer:id,name'])
             ->whereHas('employee', fn ($q) => $access->scopeVisible($q, $admin))
             ->when($unitScope !== null, fn ($q) => $q->whereHas('employee.assignments', fn ($a) => $a->whereIn('organizational_unit_id', $unitScope)))
-            ->where('status', $status)
-            ->orderBy('attendance_date')
-            ->paginate(20)->withQueryString();
+            ->where('status', $status);
+
+        if (Dt::wants($request)) {
+            return DataTables::eloquent($corrections->reorder())
+                ->addColumn('employee_name', fn (AttendanceCorrection $c) => Dt::stack($c->employee->name, $c->employee->employee_number))
+                ->editColumn('attendance_date', fn (AttendanceCorrection $c) => '<span class="text-nowrap">'.e($c->attendance_date->format('d M Y')).'</span>')
+                ->addColumn('requested', fn (AttendanceCorrection $c) => '<span class="text-nowrap">'.e($c->requested_check_in ? substr($c->requested_check_in, 0, 5) : '—').' – '.e($c->requested_check_out ? substr($c->requested_check_out, 0, 5) : '—').'</span>')
+                ->editColumn('reason', fn (AttendanceCorrection $c) => e($c->reason).($c->review_note ? '<div class="small text-secondary">Catatan: '.e($c->review_note).' ('.e($c->reviewer?->name).')</div>' : ''))
+                ->addColumn('action', fn (AttendanceCorrection $c) => view('admin.attendance._correction-actions', ['c' => $c])->render())
+                ->orderColumn('employee_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'employees', 'employee_id', 'attendance_corrections'))
+                ->filterColumn('employee_name', fn ($q, $kw) => Dt::filterRelated($q, 'employee_id', 'employees', ['name', 'employee_number'], $kw))
+                ->rawColumns(['employee_name', 'attendance_date', 'requested', 'reason', 'action'])
+                ->make(true);
+        }
 
         return view('admin.attendance.corrections', [
-            'corrections' => $corrections,
             'status' => $status,
             'scope' => $schools->options($admin),
             'filters' => $filters,
-        ])->fragmentIf($request->ajax(), 'table');
+        ]);
     }
 
     public function approve(Request $request, AttendanceCorrection $correction, EmployeeAccess $access, AttendanceService $service): RedirectResponse
