@@ -1,5 +1,7 @@
 @extends('admin._layout')
-@php($isEdit = $unit->exists)
+@php
+  $isEdit = $unit->exists;
+@endphp
 @section('title', $isEdit ? 'Ubah Unit Organisasi' : 'Tambah Unit Organisasi')
 @section('parent', 'Unit Organisasi')
 @section('parent_url', route('admin.organization.units.index'))
