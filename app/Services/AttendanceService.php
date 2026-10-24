@@ -34,9 +34,8 @@ class AttendanceService
      */
     public function checkIn(Employee $employee, ?string $ip, array $proof = []): AttendanceRecord
     {
-        $now = AttendanceClock::now();
+        [$unitId, $policy, $now] = $this->requireWorkingContext($employee);
         $date = $now->toDateString();
-        [$unitId, $policy] = $this->requireWorkingContext($employee, $now);
         $geo = $this->verifyProof($policy, $proof, 'check_in');
 
         try {
@@ -76,7 +75,7 @@ class AttendanceService
 
     public function checkOut(Employee $employee, ?string $ip, array $proof = []): AttendanceRecord
     {
-        $now = AttendanceClock::now();
+        $now = AttendanceClock::now($this->resolver->timezoneForEmployee($employee));
 
         return DB::transaction(function () use ($employee, $now, $ip, $proof) {
             $record = AttendanceRecord::query()->where('employee_id', $employee->id)
@@ -116,8 +115,9 @@ class AttendanceService
 
     public function submitCorrection(Employee $employee, User $actor, array $data): AttendanceCorrection
     {
-        $date = Carbon::parse($data['attendance_date'], AttendanceClock::tz())->startOfDay();
-        $today = AttendanceClock::today();
+        $tz = $this->resolver->timezoneForEmployee($employee);
+        $date = Carbon::parse($data['attendance_date'], $tz)->startOfDay();
+        $today = AttendanceClock::today($tz);
         $window = (int) config('attendance.correction_window_days');
 
         if ($date->gt($today) || $date->lt($today->copy()->subDays($window))) {
@@ -196,8 +196,9 @@ class AttendanceService
             $this->fail('correction', "Tanggal tersebut tercatat {$record->status->label()}; hapus catatannya dulu.");
         }
 
-        $in = $c->requested_check_in ? AttendanceClock::fromLocal($date, $c->requested_check_in) : $record?->check_in_at;
-        $out = $c->requested_check_out ? AttendanceClock::fromLocal($date, $c->requested_check_out) : $record?->check_out_at;
+        $tz = $policy->zone();
+        $in = $c->requested_check_in ? AttendanceClock::fromLocal($date, $c->requested_check_in, $tz) : $record?->check_in_at;
+        $out = $c->requested_check_out ? AttendanceClock::fromLocal($date, $c->requested_check_out, $tz) : $record?->check_out_at;
         if (! $in) {
             $this->fail('correction', 'Jam masuk belum ada; pengajuan harus menyertakan jam masuk.');
         }
@@ -239,15 +240,16 @@ class AttendanceService
             $this->fail('employee_id', 'Pegawai sudah tidak aktif bekerja.');
         }
 
-        $start = Carbon::parse($from, AttendanceClock::tz())->startOfDay();
-        $end = Carbon::parse($to, AttendanceClock::tz())->startOfDay();
+        $tz = $this->resolver->timezoneForEmployee($employee);
+        $start = Carbon::parse($from, $tz)->startOfDay();
+        $end = Carbon::parse($to, $tz)->startOfDay();
         if ($end->lt($start)) {
             $this->fail('date_to', 'Tanggal akhir tidak boleh sebelum tanggal mulai.');
         }
         if ($start->diffInDays($end) + 1 > (int) config('attendance.max_entry_range_days')) {
             $this->fail('date_to', 'Rentang tanggal terlalu panjang.');
         }
-        if ($status === AttendanceStatus::Absent && $end->gt(AttendanceClock::today())) {
+        if ($status === AttendanceStatus::Absent && $end->gt(AttendanceClock::today($tz))) {
             $this->fail('date_to', 'Tidak hadir hanya bisa dicatat untuk hari yang sudah lewat atau hari ini.');
         }
 
@@ -382,7 +384,7 @@ class AttendanceService
     /** @return array{0: AttendanceStatus, 1: int} status dan menit terlambat (dihitung dari jam masuk resmi). */
     public function evaluateIn(string $date, AttendancePolicy $policy, CarbonInterface $in): array
     {
-        $scheduled = AttendanceClock::fromLocal($date, $policy->work_start);
+        $scheduled = AttendanceClock::fromLocal($date, $policy->work_start, $policy->zone());
         $isLate = $in->gt($scheduled->copy()->addMinutes($policy->late_tolerance_minutes));
 
         return $isLate
@@ -395,14 +397,19 @@ class AttendanceService
         return (int) floor($in->diffInMinutes($out));
     }
 
-    /** @return array{0: int, 1: AttendancePolicy} */
-    private function requireWorkingContext(Employee $employee, Carbon $now): array
+    /**
+     * Penempatan dan kebijakan dipilih lebih dulu (memakai zona bawaan hanya untuk menentukan penempatan),
+     * lalu "sekarang" dihitung di zona kebijakan itu supaya hari kerja, libur, dan tanggal absen mengikuti zona unit.
+     *
+     * @return array{0: int, 1: AttendancePolicy, 2: Carbon}
+     */
+    private function requireWorkingContext(Employee $employee): array
     {
         if ($employee->status !== EmployeeStatus::Active) {
             $this->fail('attendance', 'Hanya pegawai berstatus Aktif yang dapat absen.');
         }
 
-        $unitId = $this->resolver->unitFor($employee, $now);
+        $unitId = $this->resolver->unitFor($employee, AttendanceClock::now());
         if (! $unitId) {
             $this->fail('attendance', 'Anda belum memiliki penempatan yang berlaku hari ini.');
         }
@@ -410,6 +417,8 @@ class AttendanceService
         if (! $policy) {
             $this->fail('attendance', 'Kebijakan absensi untuk unit Anda belum diatur.');
         }
+
+        $now = AttendanceClock::now($policy->zone());
         if (! $policy->isWorkDay($now->isoWeekday())) {
             $this->fail('attendance', 'Hari ini bukan hari kerja.');
         }
@@ -417,7 +426,7 @@ class AttendanceService
             $this->fail('attendance', "Hari ini libur: {$holiday->name}.");
         }
 
-        return [$unitId, $policy];
+        return [$unitId, $policy, $now];
     }
 
     private function fail(string $field, string $message): never

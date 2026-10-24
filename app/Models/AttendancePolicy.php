@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Helpers\AttendanceClock;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -9,7 +10,7 @@ class AttendancePolicy extends Model
 {
     public const DAY_NAMES = [1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'];
 
-    protected $fillable = ['organizational_unit_id', 'name', 'work_days', 'work_start', 'work_end', 'late_tolerance_minutes', 'is_active',
+    protected $fillable = ['organizational_unit_id', 'name', 'work_days', 'work_start', 'work_end', 'late_tolerance_minutes', 'timezone', 'is_active',
         'require_location', 'geo_latitude', 'geo_longitude', 'geo_radius_m', 'require_photo'];
 
     protected function casts(): array
@@ -24,6 +25,12 @@ class AttendancePolicy extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(OrganizationalUnit::class, 'organizational_unit_id');
+    }
+
+    /** Zona waktu efektif kebijakan ini; kosong = zona bawaan sistem. */
+    public function zone(): string
+    {
+        return AttendanceClock::tz($this->timezone);
     }
 
     public function hasGeofence(): bool

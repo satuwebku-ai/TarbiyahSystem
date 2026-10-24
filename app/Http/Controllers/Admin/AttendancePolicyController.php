@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use App\Support\Dt;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -29,7 +30,8 @@ class AttendancePolicyController extends Controller
 
         if (Dt::wants($request)) {
             $query = AttendancePolicy::query()->with('unit:id,name,code')
-                ->when($visible !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('organizational_unit_id')->orWhereIn('organizational_unit_id', $visible)))
+                // Seperti Struktur Organisasi: pengelola terbatas hanya melihat unit dalam cakupannya (tanpa kebijakan umum/induk).
+                ->when($visible !== null, fn ($q) => $q->whereIn('organizational_unit_id', $visible))
                 ->when($related !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('organizational_unit_id')->orWhereIn('organizational_unit_id', $related)));
 
             return DataTables::eloquent($query->reorder())
@@ -37,12 +39,13 @@ class AttendancePolicyController extends Controller
                 ->addColumn('unit_name', fn (AttendancePolicy $p) => e($p->unit?->name ?? 'Umum (seluruh organisasi)'))
                 ->addColumn('days', fn (AttendancePolicy $p) => e($p->dayLabels()))
                 ->addColumn('hours', fn (AttendancePolicy $p) => '<span class="text-nowrap">'.e(substr($p->work_start, 0, 5)).'–'.e(substr($p->work_end, 0, 5)).'</span>')
+                ->addColumn('tz', fn (AttendancePolicy $p) => '<span class="text-nowrap">'.e(\App\Helpers\AttendanceClock::abbr($p->zone())).'</span>')
                 ->editColumn('late_tolerance_minutes', fn (AttendancePolicy $p) => e($p->late_tolerance_minutes).' menit')
                 ->editColumn('is_active', fn (AttendancePolicy $p) => Dt::badge((bool) $p->is_active))
                 ->addColumn('action', fn (AttendancePolicy $p) => view('admin.attendance.policies._actions', ['p' => $p, 'isUnrestricted' => $visible === null])->render())
                 ->orderColumn('unit_name', fn ($q, $dir) => Dt::orderByRelated($q, $dir, 'organizational_units', 'organizational_unit_id', 'attendance_policies'))
                 ->filterColumn('unit_name', fn ($q, $kw) => Dt::filterRelated($q, 'organizational_unit_id', 'organizational_units', ['name', 'code'], $kw))
-                ->rawColumns(['name', 'unit_name', 'days', 'hours', 'is_active', 'action'])
+                ->rawColumns(['name', 'unit_name', 'days', 'hours', 'tz', 'is_active', 'action'])
                 ->make(true);
         }
 
@@ -54,7 +57,7 @@ class AttendancePolicyController extends Controller
 
     public function create(Request $request, EmployeeAccess $access, OrganizationAccess $org): View
     {
-        return $this->form(new AttendancePolicy(['work_days' => [1, 2, 3, 4, 5], 'work_start' => '07:00', 'work_end' => '15:00', 'late_tolerance_minutes' => 15, 'is_active' => true]), $request, $access, $org);
+        return $this->form(new AttendancePolicy(['work_days' => [1, 2, 3, 4, 5], 'work_start' => '07:00', 'work_end' => '15:00', 'late_tolerance_minutes' => 15, 'timezone' => config('attendance.timezone'), 'is_active' => true]), $request, $access, $org);
     }
 
     public function store(Request $request, OrganizationAccess $org): RedirectResponse
@@ -120,6 +123,7 @@ class AttendancePolicyController extends Controller
             'work_start' => ['required', 'date_format:H:i'],
             'work_end' => ['required', 'date_format:H:i', 'after:work_start'],
             'late_tolerance_minutes' => ['required', 'integer', 'between:0,240'],
+            'timezone' => ['required', 'string', Rule::in(array_keys(config('attendance.timezones')))],
             'is_active' => ['required', 'boolean'],
             'require_location' => ['sometimes', 'boolean'],
             'require_photo' => ['sometimes', 'boolean'],

@@ -19,7 +19,7 @@
       </form>
     </div>
   </div>
-  <div class="alert alert-light border small">Unit memakai kebijakan miliknya sendiri; jika tidak ada, naik ke unit induk, lalu ke kebijakan umum. Tanpa kebijakan yang berlaku, pegawai tidak bisa check-in.</div>
+  <div class="alert alert-light border small">Unit memakai kebijakan miliknya sendiri; jika tidak ada, naik ke unit induk, lalu ke kebijakan umum. Zona waktu (WIB/WITA/WIT) ikut kebijakan yang berlaku. Tanpa kebijakan yang berlaku, pegawai tidak bisa check-in.</div>
   <div class="card border-0 shadow-sm">
     @include('partials.admin.datatable', [
       'id' => 'tblPolicies',
@@ -32,6 +32,7 @@
         ['data' => 'unit_name', 'title' => 'Berlaku untuk'],
         ['data' => 'days', 'title' => 'Hari kerja', 'orderable' => false, 'searchable' => false],
         ['data' => 'hours', 'title' => 'Jam', 'orderable' => false, 'searchable' => false],
+        ['data' => 'tz', 'title' => 'Zona waktu', 'orderable' => false, 'searchable' => false],
         ['data' => 'late_tolerance_minutes', 'title' => 'Toleransi', 'searchable' => false],
         ['data' => 'is_active', 'title' => 'Status', 'searchable' => false],
         ['data' => 'action', 'title' => 'Tindakan', 'orderable' => false, 'searchable' => false, 'className' => 'text-end text-nowrap', 'headClass' => 'text-end'],

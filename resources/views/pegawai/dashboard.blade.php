@@ -5,12 +5,12 @@
     <div class="alert alert-danger mb-0"><ul class="mb-0 ps-3">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
   @endif
 
-  @php $local = fn ($t) => \App\Helpers\AttendanceClock::toLocal($t)?->format('H:i'); @endphp
+  @php $local = fn ($t) => \App\Helpers\AttendanceClock::toLocal($t, $tz)?->format('H:i'); @endphp
   <div class="row g-3">
     <div class="col-lg-5">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body p-4">
-          <div class="small text-secondary">{{ \App\Models\AttendancePolicy::DAY_NAMES[$now->isoWeekday()] }}, {{ $now->format('d M Y') }}</div>
+          <div class="small text-secondary">{{ \App\Models\AttendancePolicy::DAY_NAMES[$now->isoWeekday()] }}, {{ $now->format('d M Y') }} · {{ \App\Helpers\AttendanceClock::abbr($tz) }}</div>
           <h3 class="h5 fw-bold mt-1 mb-1">{{ $employee->name }} <span class="text-secondary fw-normal small">· {{ $employee->employee_number }}</span></h3>
           @if($unit)<div class="small text-secondary mb-3">{{ $unit }}</div>@else<div class="mb-3"></div>@endif
 
@@ -48,7 +48,7 @@
               </form>
             @endforeach
           </div>
-          <div class="form-text mt-2">Waktu dicatat dari jam server, bukan dari perangkat Anda.</div>
+          <div class="form-text mt-2">Waktu dicatat dari jam server ({{ \App\Helpers\AttendanceClock::abbr($tz) }}), bukan dari perangkat Anda.</div>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\AttendanceClock;
 use App\Models\AttendanceHoliday;
 use App\Models\AttendancePolicy;
 use App\Models\Employee;
@@ -63,6 +64,24 @@ class AttendancePolicyResolver
         }
 
         return $this->policies->get('global');
+    }
+
+    /** Zona waktu efektif sebuah kebijakan (null = zona bawaan sistem). */
+    public function timezoneFor(?AttendancePolicy $policy): string
+    {
+        return $policy ? $policy->zone() : AttendanceClock::tz();
+    }
+
+    /** Zona waktu yang berlaku bagi unit, mengikuti kebijakan yang berlaku pada unit itu. */
+    public function timezoneForUnit(?int $unitId): string
+    {
+        return $this->timezoneFor($this->policyForUnit($unitId));
+    }
+
+    /** Zona waktu pegawai berdasarkan penempatan yang berlaku pada $at (zona bawaan dipakai untuk memilih penempatan). */
+    public function timezoneForEmployee(Employee $employee, ?CarbonInterface $at = null): string
+    {
+        return $this->timezoneForUnit($this->unitFor($employee, $at ?? AttendanceClock::now()));
     }
 
     public function holidayFor(?int $unitId, string $date): ?AttendanceHoliday

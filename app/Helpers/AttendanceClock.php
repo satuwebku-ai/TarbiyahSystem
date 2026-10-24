@@ -2,34 +2,53 @@
 
 namespace App\Helpers;
 
+use App\Services\AttendancePolicyResolver;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 
 /**
  * Satu-satunya tempat konversi zona waktu absensi.
- * Penyimpanan = zona waktu aplikasi (UTC); logika bisnis = zona absensi (mis. Asia/Jakarta).
+ * Penyimpanan = zona waktu aplikasi (UTC); logika bisnis = zona absensi.
+ *
+ * Zona absensi ditentukan per kebijakan (attendance_policies.timezone). Semua method menerima
+ * $tz opsional; tanpa $tz dipakai zona bawaan config('attendance.timezone').
  * Laravel TIDAK mengonversi zona saat menyimpan Carbon, jadi selalu lewat toStorage().
  */
 final class AttendanceClock
 {
-    public static function tz(): string
+    /** Zona bawaan bila $tz kosong atau tidak dikenal. */
+    public static function tz(?string $tz = null): string
     {
-        return config('attendance.timezone');
+        return $tz && in_array($tz, timezone_identifiers_list(), true) ? $tz : config('attendance.timezone');
     }
 
-    public static function now(): Carbon
+    /** Zona yang berlaku bagi unit (lewat kebijakan unit itu, induk, atau umum). */
+    public static function forUnit(?int $unitId): string
     {
-        return Carbon::now(self::tz());
+        return app(AttendancePolicyResolver::class)->timezoneForUnit($unitId);
     }
 
-    public static function today(): Carbon
+    /** Singkatan WIB/WITA/WIT untuk ditampilkan di samping jam. */
+    public static function abbr(?string $tz = null): string
     {
-        return self::now()->startOfDay();
+        $tz = self::tz($tz);
+
+        return config("attendance.timezones.{$tz}.0") ?? $tz;
     }
 
-    public static function toLocal(?CarbonInterface $time): ?Carbon
+    public static function now(?string $tz = null): Carbon
     {
-        return $time ? Carbon::instance($time)->setTimezone(self::tz()) : null;
+        return Carbon::now(self::tz($tz));
+    }
+
+    public static function today(?string $tz = null): Carbon
+    {
+        return self::now($tz)->startOfDay();
+    }
+
+    public static function toLocal(?CarbonInterface $time, ?string $tz = null): ?Carbon
+    {
+        return $time ? Carbon::instance($time)->setTimezone(self::tz($tz)) : null;
     }
 
     public static function toStorage(CarbonInterface $time): Carbon
@@ -38,8 +57,8 @@ final class AttendanceClock
     }
 
     /** Tanggal + jam dinding lokal -> Carbon siap simpan. */
-    public static function fromLocal(string $date, string $time): Carbon
+    public static function fromLocal(string $date, string $time, ?string $tz = null): Carbon
     {
-        return Carbon::parse("$date $time", self::tz())->setTimezone(config('app.timezone'));
+        return Carbon::parse("$date $time", self::tz($tz))->setTimezone(config('app.timezone'));
     }
 }

@@ -26,6 +26,13 @@
         <div class="col-md-4"><label class="form-label" for="work_start">Jam masuk</label><input id="work_start" type="time" name="work_start" value="{{ old('work_start', substr((string) $policy->work_start, 0, 5)) }}" class="form-control" required></div>
         <div class="col-md-4"><label class="form-label" for="work_end">Jam pulang</label><input id="work_end" type="time" name="work_end" value="{{ old('work_end', substr((string) $policy->work_end, 0, 5)) }}" class="form-control" required></div>
         <div class="col-md-4"><label class="form-label" for="late_tolerance_minutes">Toleransi terlambat (menit)</label><input id="late_tolerance_minutes" type="number" min="0" max="240" name="late_tolerance_minutes" value="{{ old('late_tolerance_minutes', $policy->late_tolerance_minutes) }}" class="form-control" required></div>
+        <div class="col-md-4"><label class="form-label" for="timezone">Zona waktu</label>
+          <select id="timezone" name="timezone" class="form-select" required>
+            @foreach(config('attendance.timezones') as $zone => [$abbr, $label])
+              <option value="{{ $zone }}" @selected(old('timezone', $policy->timezone ?: config('attendance.timezone')) === $zone)>{{ $label }}</option>
+            @endforeach
+          </select>
+          <div class="form-text">Jam masuk/pulang dan batas hari absen mengikuti zona ini.</div></div>
         <div class="col-12"><div class="form-check"><input type="hidden" name="is_active" value="0"><input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" @checked(old('is_active', $policy->is_active))><label class="form-check-label" for="is_active">Aktif</label></div></div>
         <div class="col-12"><hr class="my-1"><div class="fw-semibold">Bukti absen (opsional)</div></div>
         <div class="col-12">
@@ -43,7 +50,7 @@
           </div>
         </div>
       </div>
-      <div class="alert alert-light border small mt-3 mb-0">Terlambat dihitung bila check-in melewati jam masuk ditambah toleransi; menit terlambat dihitung dari jam masuk resmi. Perubahan tidak mengubah catatan yang sudah ada. Syarat foto dan lokasi berlaku untuk check-in dan check-out; foto hanya bisa dilihat pengelola yang berhak melihat rekap absensi.</div>
+      <div class="alert alert-light border small mt-3 mb-0">Terlambat dihitung bila check-in melewati jam masuk (menurut zona waktu kebijakan) ditambah toleransi; menit terlambat dihitung dari jam masuk resmi. Perubahan tidak mengubah catatan yang sudah ada. Syarat foto dan lokasi berlaku untuk check-in dan check-out; foto hanya bisa dilihat pengelola yang berhak melihat rekap absensi.</div>
       <div class="d-flex justify-content-end gap-2 mt-4"><a href="{{ route('admin.attendance.policies.index') }}" class="btn btn-light">Batal</a><button class="btn btn-primary" type="submit">Simpan</button></div>
     </form>
   </div></div>

@@ -4,6 +4,13 @@ return [
     // Zona waktu bisnis absensi. Waktu disimpan UTC; tanggal & jam kerja dihitung di zona ini.
     'timezone' => env('ATTENDANCE_TIMEZONE', 'Asia/Makassar'),
 
+    // Zona waktu yang boleh dipilih pada kebijakan absensi (kunci = nama zona IANA).
+    'timezones' => [
+        'Asia/Jakarta' => ['WIB', 'WIB (UTC+7)'],
+        'Asia/Makassar' => ['WITA', 'WITA (UTC+8)'],
+        'Asia/Jayapura' => ['WIT', 'WIT (UTC+9)'],
+    ],
+
     // Batas hari ke belakang untuk mengajukan koreksi absensi.
     'correction_window_days' => 14,
 

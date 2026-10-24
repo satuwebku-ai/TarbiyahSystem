@@ -26,15 +26,17 @@ class AttendanceController extends Controller
     public function show(Request $request, PegawaiPortalAccess $access, AttendancePolicyResolver $resolver): View
     {
         $employee = $this->employee($request, $access);
-        $now = AttendanceClock::now();
-        $unitId = $resolver->unitFor($employee, $now);
+        $unitId = $resolver->unitFor($employee, AttendanceClock::now());
         $policy = $unitId ? $resolver->policyForUnit($unitId) : null;
+        $tz = $resolver->timezoneFor($policy);
+        $now = AttendanceClock::now($tz);
         $holiday = $unitId ? $resolver->holidayFor($unitId, $now->toDateString()) : null;
         $today = AttendanceRecord::query()->where('employee_id', $employee->id)->where('attendance_date', $now->toDateString())->first();
 
         return view('pegawai.dashboard', [
             'employee' => $employee,
             'now' => $now,
+            'tz' => $tz,
             'unit' => $unitId ? OrganizationalUnit::query()->whereKey($unitId)->value('name') : null,
             'policy' => $policy,
             'holiday' => $holiday,
@@ -57,14 +59,18 @@ class AttendanceController extends Controller
         throw $e->redirectTo(route('pegawai.dashboard'));
     }
 
-    return back()->with('success', 'Check-in tercatat pukul '.AttendanceClock::toLocal($record->check_in_at)->format('H:i').'.');
+    $tz = AttendanceClock::forUnit($record->organizational_unit_id);
+
+    return back()->with('success', 'Check-in tercatat pukul '.AttendanceClock::toLocal($record->check_in_at, $tz)->format('H:i').' '.AttendanceClock::abbr($tz).'.');
 }
 
     public function checkOut(Request $request, PegawaiPortalAccess $access, AttendanceService $service): RedirectResponse
     {
         $record = $service->checkOut($this->employee($request, $access), $request->ip(), $this->proof($request));
 
-        return back()->with('success', 'Check-out tercatat pukul '.AttendanceClock::toLocal($record->check_out_at)->format('H:i').'.');
+        $tz = AttendanceClock::forUnit($record->organizational_unit_id);
+
+        return back()->with('success', 'Check-out tercatat pukul '.AttendanceClock::toLocal($record->check_out_at, $tz)->format('H:i').' '.AttendanceClock::abbr($tz).'.');
     }
 
     public function storeCorrection(Request $request, PegawaiPortalAccess $access, AttendanceService $service): RedirectResponse

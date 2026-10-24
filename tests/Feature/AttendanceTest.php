@@ -325,7 +325,7 @@ class AttendanceTest extends TestCase
         $this->actingAs($scoped, 'admin');
         $payload = fn ($unit) => [
             'organizational_unit_id' => $unit, 'name' => 'Kebijakan', 'work_days' => [1, 2, 3], 'work_start' => '07:30',
-            'work_end' => '14:00', 'late_tolerance_minutes' => 10, 'is_active' => 1,
+            'work_end' => '14:00', 'late_tolerance_minutes' => 10, 'timezone' => 'Asia/Jakarta', 'is_active' => 1,
         ];
 
         $this->post(route('admin.attendance.policies.store'), $payload(null))->assertForbidden();           // umum
@@ -333,6 +333,101 @@ class AttendanceTest extends TestCase
         $this->post(route('admin.attendance.policies.store'), $payload($this->unitA->id))->assertSessionHasNoErrors();
         $this->post(route('admin.attendance.policies.store'), $payload($this->unitA->id))->assertSessionHasErrors('organizational_unit_id');
         $this->post(route('admin.attendance.policies.store'), [...$payload($this->unitA->id), 'work_end' => '07:00', 'is_active' => 0])->assertSessionHasErrors('work_end');
+    }
+
+    public function test_policy_list_shows_only_units_in_scope_like_the_org_structure(): void
+    {
+        AttendancePolicy::query()->delete();
+        $this->makePolicy($this->unitA, 'Asia/Jakarta')->update(['name' => 'Kebijakan A']);
+        $this->makePolicy($this->unitB, 'Asia/Jakarta')->update(['name' => 'Kebijakan B']);
+        AttendancePolicy::create([
+            'organizational_unit_id' => null, 'name' => 'Kebijakan Umum', 'work_days' => [1, 2, 3], 'work_start' => '07:00',
+            'work_end' => '15:00', 'late_tolerance_minutes' => 15, 'is_active' => true,
+        ]);
+
+        $this->actingAs($this->makeAdmin(['attendance.policies.manage'], $this->unitA), 'admin');
+        $this->getJson(route('admin.attendance.policies.index'), ['X-Requested-With' => 'XMLHttpRequest'])
+            ->assertOk()->assertSee('Kebijakan A')->assertDontSee('Kebijakan B')->assertDontSee('Kebijakan Umum');
+    }
+
+    public function test_policy_timezone_is_required_and_limited_to_indonesian_zones(): void
+    {
+        $scoped = $this->makeAdmin(['attendance.policies.manage'], $this->unitA);
+        $this->actingAs($scoped, 'admin');
+        $payload = [
+            'organizational_unit_id' => $this->unitA->id, 'name' => 'Kebijakan', 'work_days' => [1, 2, 3], 'work_start' => '07:30',
+            'work_end' => '14:00', 'late_tolerance_minutes' => 10, 'is_active' => 1,
+        ];
+
+        $this->post(route('admin.attendance.policies.store'), $payload)->assertSessionHasErrors('timezone');
+        $this->post(route('admin.attendance.policies.store'), [...$payload, 'timezone' => 'Asia/Tokyo'])->assertSessionHasErrors('timezone');
+        $this->post(route('admin.attendance.policies.store'), [...$payload, 'timezone' => 'Asia/Jayapura'])->assertSessionHasNoErrors();
+
+        $this->assertSame('Asia/Jayapura', AttendancePolicy::where('organizational_unit_id', $this->unitA->id)->firstOrFail()->timezone);
+    }
+
+    public function test_timezone_follows_the_policy_that_applies_to_the_unit_including_inherited_ones(): void
+    {
+        config(['attendance.timezone' => 'Asia/Jakarta']);
+        $resolver = new AttendancePolicyResolver();
+
+        $this->assertSame('Asia/Jakarta', $resolver->timezoneForUnit($this->unitA->id)); // kebijakan umum tanpa zona -> bawaan
+
+        $this->makePolicy($this->root, 'Asia/Jayapura');
+        $resolver = new AttendancePolicyResolver();
+        $this->assertSame('Asia/Jayapura', $resolver->timezoneForUnit($this->unitA->id)); // mewarisi dari unit induk
+        $this->assertSame('Asia/Jayapura', $resolver->timezoneForUnit($this->unitB->id));
+
+        $this->makePolicy($this->unitB, 'Asia/Makassar');
+        $resolver = new AttendancePolicyResolver();
+        $this->assertSame('Asia/Makassar', $resolver->timezoneForUnit($this->unitB->id)); // kebijakan sendiri menimpa induk
+        $this->assertSame('Asia/Jayapura', $resolver->timezoneForUnit($this->unitA->id));
+    }
+
+    public function test_late_minutes_and_attendance_date_are_calculated_in_each_units_own_timezone(): void
+    {
+        config(['attendance.timezone' => 'Asia/Jakarta']);
+        $this->makePolicy($this->unitA, 'Asia/Jayapura'); // WIT, UTC+9
+        $this->makePolicy($this->unitB, 'Asia/Jakarta');  // WIB, UTC+7
+        [$wit] = $this->linkedEmployee($this->unitA);
+        [$wib] = $this->linkedEmployee($this->unitB);
+
+        // Saat yang sama (00:30 UTC): 09:30 WIT dan 07:30 WIB; jam masuk sama-sama 07:00, toleransi 15 menit.
+        Carbon::setTestNow('2026-10-21 00:30:00');
+        $this->actingAs($wit, 'pegawai')->post(route('pegawai.check-in'))->assertSessionHasNoErrors();
+        $this->actingAs($wib, 'pegawai')->post(route('pegawai.check-in'))->assertSessionHasNoErrors();
+
+        $rec = AttendanceRecord::orderBy('id')->get();
+        $this->assertSame(AttendanceStatus::Late, $rec[0]->status);
+        $this->assertSame(150, $rec[0]->late_minutes);
+        $this->assertSame(AttendanceStatus::Late, $rec[1]->status);
+        $this->assertSame(30, $rec[1]->late_minutes);
+        $this->assertSame('2026-10-21 00:30:00', $rec[0]->check_in_at->format('Y-m-d H:i:s')); // tetap tersimpan UTC
+        $this->assertSame('09:30', AttendanceClock::toLocal($rec[0]->check_in_at, 'Asia/Jayapura')->format('H:i'));
+    }
+
+    public function test_attendance_date_uses_the_units_local_day_across_zones(): void
+    {
+        config(['attendance.timezone' => 'Asia/Jakarta']);
+        $this->makePolicy($this->unitA, 'Asia/Jayapura');
+        [$wit] = $this->linkedEmployee($this->unitA);
+
+        // 15:30 UTC Selasa = 00:30 WIT Rabu: tanggal absen harus Rabu (hari kerja menurut zona unit).
+        Carbon::setTestNow('2026-10-20 15:30:00');
+        $this->actingAs($wit, 'pegawai')->post(route('pegawai.check-in'))->assertSessionHasNoErrors();
+
+        $this->assertSame('2026-10-21', AttendanceRecord::firstOrFail()->attendance_date->toDateString());
+    }
+
+    public function test_employee_without_zone_on_policy_keeps_the_system_default_zone(): void
+    {
+        config(['attendance.timezone' => 'Asia/Makassar']);
+        [$user] = $this->linkedEmployee($this->unitA); // kebijakan umum tanpa zona
+
+        Carbon::setTestNow('2026-10-21 00:10:00'); // 08:10 WITA -> terlambat 70 menit dari 07:00
+        $this->actingAs($user, 'pegawai')->post(route('pegawai.check-in'))->assertSessionHasNoErrors();
+
+        $this->assertSame(70, AttendanceRecord::firstOrFail()->late_minutes);
     }
 
     public function test_holidays_respect_scope_and_reject_duplicates(): void
@@ -432,6 +527,14 @@ class AttendanceTest extends TestCase
             ->get(route('admin.attendance.photo', [$record, 'in']))->assertForbidden();
         $this->actingAs($this->makeAdmin([], $this->unitA), 'admin')
             ->get(route('admin.attendance.photo', [$record, 'in']))->assertForbidden();
+    }
+
+    private function makePolicy(OrganizationalUnit $unit, string $timezone): AttendancePolicy
+    {
+        return AttendancePolicy::create([
+            'organizational_unit_id' => $unit->id, 'name' => "Kebijakan {$unit->code}", 'work_days' => [1, 2, 3, 4, 5, 6],
+            'work_start' => '07:00', 'work_end' => '15:00', 'late_tolerance_minutes' => 15, 'timezone' => $timezone, 'is_active' => true,
+        ]);
     }
 
     private function linkedEmployee(OrganizationalUnit $unit, string $start = '2026-01-01', ?string $name = null): array

@@ -4,7 +4,7 @@
 @section('subtitle', 'Rekap bulanan milik Anda. Angka sama dengan rekap yang dilihat pengelola.')
 @section('content')
   @php
-    $local = fn ($t) => \App\Helpers\AttendanceClock::toLocal($t)?->format('H:i');
+    $local = fn ($t, $tz = null) => \App\Helpers\AttendanceClock::toLocal($t, $tz)?->format('H:i');
     $dur = fn ($m) => intdiv($m, 60).'j '.($m % 60).'m';
     $cols = ['present' => 'Hadir', 'late' => 'Terlambat', 'permit' => 'Izin', 'sick' => 'Sakit', 'leave' => 'Cuti', 'absent' => 'Tidak hadir'];
   @endphp
@@ -42,8 +42,8 @@
               <tr>
                 <td>{{ \Carbon\Carbon::parse($date)->format('D, d M Y') }}</td>
                 <td><span class="badge {{ \App\Services\AttendanceRecapService::badge($day['status']) }}">{{ \App\Services\AttendanceRecapService::label($day['status']) }}</span></td>
-                <td>{{ $local($r?->check_in_at) ?? '—' }}</td>
-                <td>{{ $local($r?->check_out_at) ?? '—' }}</td>
+                <td>{{ $local($r?->check_in_at, $day['tz']) ?? '—' }}</td>
+                <td>{{ $local($r?->check_out_at, $day['tz']) ?? '—' }}</td>
                 <td>{{ $r?->late_minutes ? $r->late_minutes.' menit' : '—' }}</td>
               </tr>
             @endforeach

@@ -47,7 +47,6 @@ class AttendanceRecapService
         $ids = $employees->pluck('id');
         $fromS = $from->toDateString();
         $toS = $to->toDateString();
-        $today = AttendanceClock::today()->toDateString();
 
         $assignments = EmployeeAssignment::query()
             ->whereIn('employee_id', $ids)
@@ -63,7 +62,7 @@ class AttendanceRecapService
             ->map(fn ($g) => $g->keyBy(fn ($r) => $r->attendance_date->toDateString()));
 
         $unitTotals = [];
-        $rows = $employees->map(function ($employee) use ($from, $to, $today, $assignments, $records, $unitScope, &$unitTotals) {
+        $rows = $employees->map(function ($employee) use ($from, $to, $assignments, $records, $unitScope, &$unitTotals) {
             $mine = $assignments->get($employee->id, collect());
             $mineRecords = $records->get($employee->id, collect());
             $counts = array_fill_keys(self::COUNT_KEYS, 0);
@@ -83,18 +82,19 @@ class AttendanceRecapService
                     continue; // pegawai tidak bertugas pada hari itu
                 }
                 $unitId = $record?->organizational_unit_id ?? $unitId;
+                $policy = $this->resolver->policyForUnit($unitId);
+                $tz = $this->resolver->timezoneFor($policy);
 
                 if ($record) {
                     $key = $record->status->value;
                     $work += (int) $record->work_minutes;
                     $lateMinutes += (int) $record->late_minutes;
                 } else {
-                    $policy = $this->resolver->policyForUnit($unitId);
                     $key = match (true) {
                         ! $policy => 'none',
                         ! $policy->isWorkDay($d->isoWeekday()) => 'off',
                         (bool) $this->resolver->holidayFor($unitId, $date) => 'holiday',
-                        $date >= $today => 'none',
+                        $date >= AttendanceClock::today($tz)->toDateString() => 'none',
                         default => 'absent_auto',
                     };
                 }
@@ -105,7 +105,7 @@ class AttendanceRecapService
                     $unitTotals[$unitId] ??= array_fill_keys(self::COUNT_KEYS, 0);
                     $unitTotals[$unitId][$bucket]++;
                 }
-                $days[$date] = ['status' => $key, 'record' => $record, 'unit_id' => $unitId];
+                $days[$date] = ['status' => $key, 'record' => $record, 'unit_id' => $unitId, 'tz' => $tz];
             }
 
             return compact('employee', 'days', 'counts') + ['work_minutes' => $work, 'late_minutes' => $lateMinutes];

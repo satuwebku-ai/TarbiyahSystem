@@ -21,10 +21,10 @@ return [
                     'rules' => ['required', 'string', 'max:100'],
                 ],
                 'attendance_timezone' => [
-                    'label' => 'Zona waktu absensi', 'type' => 'select', 'config' => ['attendance.timezone'],
+                    'label' => 'Zona waktu bawaan absensi', 'type' => 'select', 'config' => ['attendance.timezone'],
                     'options' => ['Asia/Jakarta' => 'WIB (Asia/Jakarta)', 'Asia/Makassar' => 'WITA (Asia/Makassar)', 'Asia/Jayapura' => 'WIT (Asia/Jayapura)'],
                     'rules' => ['required', 'in:Asia/Jakarta,Asia/Makassar,Asia/Jayapura'],
-                    'help' => 'Samakan dengan lokasi sekolah dan jam pada mesin fingerprint.',
+                    'help' => 'Dipakai bila kebijakan absensi tidak menentukan zona sendiri, serta untuk absensi siswa dan jam mesin fingerprint. Zona absensi pegawai diatur per kebijakan di menu Kebijakan Absensi.',
                 ],
             ],
         ],

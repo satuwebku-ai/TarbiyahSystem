@@ -8,7 +8,7 @@
   @fragment('table')
   @if($truncated)<div class="alert alert-warning">Hanya 500 pegawai pertama yang ditampilkan. Persempit dengan filter KOMWIL / KOMDA / sekolah.</div>@endif
   @php
-    $local = fn ($t) => \App\Helpers\AttendanceClock::toLocal($t)?->format('H:i');
+    $local = fn ($t, $tz) => ($l = \App\Helpers\AttendanceClock::toLocal($t, $tz)) ? $l->format('H:i').' '.\App\Helpers\AttendanceClock::abbr($tz) : null;
     $dur = fn ($m) => $m === null ? '—' : intdiv($m, 60).'j '.($m % 60).'m';
     $key = $date->toDateString();
   @endphp
@@ -24,8 +24,8 @@
             <tr>
               <td><a href="{{ route('admin.employees.show', $row['employee']) }}" class="fw-semibold text-decoration-none">{{ $row['employee']->name }}</a><div class="small text-secondary">{{ $row['employee']->employee_number }}</div></td>
               <td><span class="badge {{ \App\Services\AttendanceRecapService::badge($day['status']) }}">{{ \App\Services\AttendanceRecapService::label($day['status']) }}</span></td>
-              <td>{{ $local($rec?->check_in_at) ?? '—' }}</td>
-              <td>{{ $local($rec?->check_out_at) ?? '—' }}</td>
+              <td>{{ $local($rec?->check_in_at, $day['tz']) ?? '—' }}</td>
+              <td>{{ $local($rec?->check_out_at, $day['tz']) ?? '—' }}</td>
               <td>{{ $rec?->late_minutes ? $rec->late_minutes.' menit' : '—' }}</td>
               <td>{{ $dur($rec?->work_minutes) }}</td>
               <td class="small text-secondary">{{ $rec ? ['web' => 'Check-in', 'correction' => 'Koreksi', 'manual' => 'Dicatat pengelola'][$rec->source] ?? $rec->source : '—' }}</td>
