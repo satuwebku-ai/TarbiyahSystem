@@ -31,10 +31,10 @@
     </div>
 
     <div class="col-lg-5 d-flex flex-column gap-3">
-      <a href="{{ route('pelajar.profile.edit') }}" class="quick-card card border-0 shadow-sm">
+      <a href="{{ route('pelajar.attendance') }}" class="quick-card card border-0 shadow-sm">
         <div class="card-body d-flex align-items-center gap-3">
-          <span class="stat-icon"><x-icon name="user"/></span>
-          <div><div class="fw-semibold">Ubah profil</div><div class="text-secondary small">Perbarui nama dan email Anda.</div></div>
+          <span class="stat-icon"><x-icon name="calendar"/></span>
+          <div><div class="fw-semibold">Rekap absensi</div><div class="text-secondary small">Lihat kehadiran Anda per bulan.</div></div>
         </div>
       </a>
       <a href="{{ route('pelajar.profile.edit') }}#password" class="quick-card card border-0 shadow-sm">

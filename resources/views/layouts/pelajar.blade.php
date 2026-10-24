@@ -11,6 +11,7 @@
   $initials = \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($me->name, 0, 1));
   $links = [
     ['Dashboard',          'home', route('pelajar.dashboard'),    'pelajar.dashboard'],
+    ['Absensi',            'calendar', route('pelajar.attendance'), 'pelajar.attendance'],
     ['Profil & Keamanan',  'user', route('pelajar.profile.edit'), 'pelajar.profile.*'],
   ];
 @endphp

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Pelajar\AttendanceController;
 use App\Http\Controllers\Pelajar\AuthController;
 use App\Http\Controllers\Pelajar\DashboardController;
 use App\Http\Controllers\Pelajar\PasswordResetController;
@@ -32,6 +33,7 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/', DashboardController::class)->name('dashboard');
+    Route::get('absensi', AttendanceController::class)->name('attendance');
 
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
