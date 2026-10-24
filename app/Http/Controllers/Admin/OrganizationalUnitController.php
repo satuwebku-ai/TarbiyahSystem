@@ -91,6 +91,7 @@ class OrganizationalUnitController extends Controller
             'addable' => $addable,
             'rootTypes' => $rootTypes,
             'parentChoices' => $this->hierarchy->parentChoices($all, $addable),
+            'flow' => $this->hierarchy->flowSteps($all, $addable, $rootTypes),
             'unitNames' => $all->pluck('name', 'id')->all(),
         ]);
     }
@@ -160,6 +161,7 @@ class OrganizationalUnitController extends Controller
             'addable' => $addable,
             'rootTypes' => $rootTypes,
             'parentChoices' => $this->hierarchy->parentChoices($all, $addable),
+            'flow' => $this->hierarchy->flowSteps($all, $addable, $rootTypes),
             'unitNames' => $all->pluck('name', 'id')->all(),
             'ownInvalidIds' => $this->hierarchy->audit()['own'],
         ]);

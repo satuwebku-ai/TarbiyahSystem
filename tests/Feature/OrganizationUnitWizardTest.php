@@ -187,4 +187,35 @@ class OrganizationUnitWizardTest extends TestCase
             ->assertOk()
             ->assertDontSee('id="orgAddNoParent"', false);
     }
+
+    public function test_units_index_shows_input_flow_with_counts_between_filter_and_tree(): void
+    {
+        $komda = OrganizationalUnitType::query()->create(['name' => 'KOMDA', 'slug' => 'komda', 'is_active' => true]);
+        $pb = $this->makePb('PB-1');
+        OrganizationalUnit::query()->create(['type_id' => $this->komwil->id, 'parent_id' => $pb->id, 'code' => 'KW-A', 'name' => 'KOMWIL A', 'status' => 'active']);
+        OrganizationalUnit::query()->create(['type_id' => $this->komwil->id, 'parent_id' => $pb->id, 'code' => 'KW-B', 'name' => 'KOMWIL B', 'status' => 'active']);
+
+        $response = $this->get(route('admin.organization.units.index'))
+            ->assertOk()
+            ->assertSee('id="orgUnitFlow"', false)
+            ->assertSee('Alur pengisian unit organisasi')
+            ->assertSee('data-type-id="'.$this->komwil->id.'"', false)
+            ->assertSee('data-type-id="'.$komda->id.'"', false);
+
+        $html = $response->getContent();
+        $this->assertLessThan(strpos($html, 'id="orgTree"'), strpos($html, 'id="orgUnitFlow"'));
+        $this->assertGreaterThan(strpos($html, 'id="unitFilter"'), strpos($html, 'id="orgUnitFlow"'));
+        $this->assertMatchesRegularExpression('/uf-title">\s*KOMWIL\s*<\/div>.*?uf-num">2</s', $html);
+    }
+
+    public function test_input_flow_locks_levels_whose_parent_level_is_empty(): void
+    {
+        OrganizationalUnitType::query()->create(['name' => 'KOMDA', 'slug' => 'komda', 'is_active' => true]);
+        $this->makePb('PB-1');
+
+        $this->get(route('admin.organization.units.index'))
+            ->assertOk()
+            ->assertSee('Isi KOMWIL terlebih dahulu.')
+            ->assertSee('Langkah berikutnya.');
+    }
 }

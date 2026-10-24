@@ -90,6 +90,7 @@
               @endforeach
             </select>
             <div class="invalid-feedback" data-fb="parent_id"></div>
+            <div class="form-text text-primary d-none" id="orgAddFilterNote"></div>
             @if ($hasParentOptions)
               <div class="form-text mt-2">
                 Induk yang dicari tidak ada? Unit induk harus dibuat lebih dulu dan berstatus aktif.
@@ -239,6 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var panels = Array.prototype.slice.call(modalEl.querySelectorAll('.ow-panel'));
   var stepEls = Array.prototype.slice.call(modalEl.querySelectorAll('.ow-step'));
   var btnBack = el('orgAddBack'), btnNext = el('orgAddNext'), btnSubmit = el('orgAddSubmit'), form = el('orgAddForm');
+  var parentOpts = Array.prototype.slice.call(pickSel.options).slice(1), desiredType = null;
   var current = 1, maxReached = 1, done = {}, codeState = { value: '', status: 'idle' }, codeTimer = null;
   var FIELD_STEP = { parent_id: 1, type_id: 2, name: 3, code: 3, status: 3, address: 4, description: 4 };
 
@@ -276,6 +278,26 @@ document.addEventListener('DOMContentLoaded', function () {
       templateSelection: function (s) { return s.element && s.element.dataset && s.element.dataset.name ? s.element.dataset.name : s.text; }
     });
     $j(typeSel).select2({ dropdownParent: $j(modalEl), placeholder: typeSel.getAttribute('data-placeholder'), minimumResultsForSearch: 0 });
+  }
+
+  // ---------- induk: bisa disaring menurut jenis yang ingin dibuat (tombol pada alur pengisian) ----------
+  function rebuildParents(typeId) {
+    while (pickSel.options.length > 1) pickSel.remove(1);
+    var n = 0;
+    parentOpts.forEach(function (o) {
+      var ok = true;
+      if (typeId) {
+        if (o.value === 'root') ok = rootTypeIds.map(String).indexOf(String(typeId)) > -1;
+        else { var c = choiceById(o.value); ok = !!c && c.type_ids.map(String).indexOf(String(typeId)) > -1; }
+      }
+      if (ok) { pickSel.appendChild(o); n++; }
+    });
+    pickSel.value = '';
+    if ($j) $j(pickSel).trigger('change.select2');
+    var note = el('orgAddFilterNote'), t = typeId ? typeOf(typeId) : null;
+    note.textContent = t ? 'Menampilkan unit induk yang boleh diberi ' + t.name + '.' : '';
+    note.classList.toggle('d-none', !t);
+    return n;
   }
 
   // ---------- jenis menyesuaikan induk ----------
@@ -424,7 +446,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ---------- peristiwa ----------
   function afterPickChange() {
     clearErr('parent_id'); parentVal.value = isRoot() ? '' : pickSel.value;
-    rebuildTypes(null); maxReached = 1; done = {}; stepEls.forEach(function (s) { s.classList.remove('is-done', 'is-error'); });
+    rebuildTypes(desiredType); maxReached = 1; done = {}; stepEls.forEach(function (s) { s.classList.remove('is-done', 'is-error'); });
     if (pickSel.value) { done[1] = true; maxReached = 2; }
     go(1);
   }
@@ -453,10 +475,16 @@ document.addEventListener('DOMContentLoaded', function () {
   modalEl.addEventListener('show.bs.modal', function (e) {
     var btn = e.relatedTarget; if (!btn) return;
     resetAll();
+    desiredType = btn.dataset.typeId ? String(btn.dataset.typeId) : null;
+    var count = rebuildParents(desiredType);
     if (btn.dataset.parentId !== undefined) {
       var pid = btn.dataset.parentId === '' ? 'root' : btn.dataset.parentId;
       setPick(pid);
-      if (pickSel.value === pid) { parentVal.value = pid === 'root' ? '' : pid; rebuildTypes(null); done[1] = true; maxReached = 2; go(2); return; }
+      if (pickSel.value === pid) { parentVal.value = pid === 'root' ? '' : pid; rebuildTypes(desiredType); done[1] = true; maxReached = 2; go(2); return; }
+    } else if (desiredType && count === 1) {
+      // hanya satu induk yang cocok: langsung ke pilihan jenis
+      setPick(pickSel.options[1].value);
+      parentVal.value = isRoot() ? '' : pickSel.value; rebuildTypes(desiredType); done[1] = true; maxReached = 2; go(2); return;
     }
     go(1);
   });

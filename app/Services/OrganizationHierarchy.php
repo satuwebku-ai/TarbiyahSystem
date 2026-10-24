@@ -214,6 +214,86 @@ class OrganizationHierarchy
     }
 
     /**
+     * Alur pengisian unit organisasi: jenis unit diurutkan dari tingkat teratas ke bawah,
+     * lengkap dengan jumlah unit yang sudah diinput dan status langkahnya.
+     * state: done = sudah ada unit, current = langkah berikutnya, open = bisa diisi, locked = menunggu induk.
+     *
+     * @param  Collection<int, OrganizationalUnit>  $units  harus memuat relasi type
+     * @param  array<int, array<int, array<string, mixed>>>  $addable
+     * @param  array<int, array<string, mixed>>  $rootTypes
+     * @return array<int, array<string, mixed>>
+     */
+    public function flowSteps(Collection $units, array $addable, array $rootTypes): array
+    {
+        $levels = $this->levels();
+        $order = array_flip(array_keys($levels));
+        $activeTypes = OrganizationalUnitType::query()->where('is_active', true)->orderBy('name')->get();
+        $countBySlug = $units->filter(fn ($unit) => $unit->type)->groupBy(fn ($unit) => $unit->type->slug)->map->count();
+        $addableIds = collect($addable)->flatten(1)->pluck('id')->merge(collect($rootTypes)->pluck('id'))
+            ->map(fn ($id) => (int) $id)->unique()->all();
+
+        $depth = function (string $slug, int $guard = 0) use (&$depth, $levels): int {
+            $parents = $levels[$slug]['parents'] ?? [];
+            if ($parents === [] || $guard > 10) {
+                return 0;
+            }
+
+            return 1 + min(array_map(fn ($parent) => $depth($parent, $guard + 1), $parents));
+        };
+
+        $configured = $activeTypes->filter(fn ($type) => isset($levels[$type->slug]))
+            ->sortBy(fn ($type) => [$depth($type->slug), $order[$type->slug]])->values();
+        $free = $activeTypes->reject(fn ($type) => isset($levels[$type->slug]))->sortBy('name')->values();
+
+        $steps = [];
+        $nextFound = false;
+        foreach ($configured->concat($free)->values() as $i => $type) {
+            $slug = $type->slug;
+            $level = $levels[$slug] ?? null;
+            $parents = $level['parents'] ?? null;
+            $count = (int) ($countBySlug[$slug] ?? 0);
+
+            if ($level === null) {
+                $ready = $units->isNotEmpty();
+                $hint = 'Boleh di bawah unit mana pun.';
+                $needs = 'Buat unit induk terlebih dahulu.';
+            } elseif ($parents === []) {
+                $ready = true;
+                $hint = 'Tingkat teratas, tanpa induk.';
+                $needs = null;
+            } else {
+                $names = implode(' / ', array_map(fn ($parent) => $levels[$parent]['short'] ?? $parent, $parents));
+                $ready = collect($parents)->contains(fn ($parent) => ($countBySlug[$parent] ?? 0) > 0);
+                $hint = "Di bawah {$names}.";
+                $needs = "Isi {$names} terlebih dahulu.";
+            }
+
+            $state = $count > 0 ? 'done' : ($ready ? 'open' : 'locked');
+            $isNext = false;
+            if ($state === 'open' && ! $nextFound) {
+                $state = 'current';
+                $isNext = $nextFound = true;
+            }
+
+            $steps[] = [
+                'key' => $slug,
+                'number' => $i + 1,
+                'type_id' => (int) $type->id,
+                'label' => $level['short'] ?? $type->name,
+                'name' => $type->name,
+                'count' => $count,
+                'state' => $state,
+                'is_next' => $isNext,
+                'hint' => $hint,
+                'needs' => $needs,
+                'can_add' => in_array((int) $type->id, $addableIds, true),
+            ];
+        }
+
+        return $steps;
+    }
+
+    /**
      * Pilihan unit induk untuk wizard tambah unit: hanya unit yang boleh diberi turunan,
      * lengkap dengan jalur induknya agar mudah dicari dan dibedakan.
      *

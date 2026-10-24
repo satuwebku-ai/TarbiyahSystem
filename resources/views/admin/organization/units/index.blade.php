@@ -44,6 +44,8 @@
     </div>
   </div>
 
+  @include('admin.organization.partials.unit-flow', ['flow' => $flow ?? [], 'view' => $view])
+
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div class="small text-secondary">
       @if ($view === 'tree')
