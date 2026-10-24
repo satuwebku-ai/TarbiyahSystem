@@ -24,6 +24,10 @@
   var form = document.querySelector('form[data-ajax-filter]');
   var seq = 0, timer = null;
   var pushUrl = !(form && form.hasAttribute('data-ajax-nopush'));
+  // Alamat bersih: query dari tautan masuk (?type_id=1, dst.) dihapus; nilai filter sudah tampil di form.
+  if (!pushUrl && location.search && window.history && history.replaceState) {
+    history.replaceState(history.state, '', location.pathname + location.hash);
+  }
 
   function load(url, push, scroll) {
     var n = ++seq;

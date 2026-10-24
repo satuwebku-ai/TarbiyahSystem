@@ -145,5 +145,6 @@
   @endif
   @push('scripts')
     @include('partials.admin.school-classroom-sync')
+    @include('partials.admin.clean-url')
   @endpush
 @endsection

@@ -53,4 +53,5 @@
       <div class="card-footer bg-transparent small text-secondary">“Tidak hadir” mencakup hari kerja yang sudah lewat tanpa catatan apa pun. Keliru? Ajukan koreksi di halaman Absen (maksimal {{ config('attendance.correction_window_days') }} hari ke belakang).</div>
     </div>
   @endif
+  @include('partials.admin.clean-url')
 @endsection

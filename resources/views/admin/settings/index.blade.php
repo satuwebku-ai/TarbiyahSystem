@@ -95,4 +95,7 @@
       </form>
     @endcan
   @endif
+  @push('scripts')
+    @include('partials.admin.clean-url')
+  @endpush
 @endsection

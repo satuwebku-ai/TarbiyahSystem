@@ -67,7 +67,8 @@
  *  - url     : endpoint JSON (route index yang sama; controller membalas Yajra bila ada parameter "draw")
  *  - columns : [{ data, title, orderable, searchable, className }]
  *  - filter  : selector <form> GET; nilainya ikut dikirim ke server, submit / perubahan → reload tanpa muat ulang halaman
- *  URL halaman ikut diperbarui (replaceState) supaya filter tetap bisa di-bookmark.
+ *  Alamat halaman dijaga bersih: filter tidak ditulis ke URL, dan query dari tautan masuk
+ *  (mis. ?unit_id=20) dihapus dari address bar setelah halaman terbuka. keepUrl:true = perilaku lama.
  */
 window.TarbiyahDt = function (selector, opts) {
   var $ = window.jQuery;
@@ -90,6 +91,9 @@ window.TarbiyahDt = function (selector, opts) {
   }
   function qsOf() { return $.param(formParams()); }
   var lastQs = qsOf();
+  if (!opts.keepUrl && location.search && window.history && history.replaceState) {
+    history.replaceState(history.state, '', location.pathname + location.hash);
+  }
 
   function skeletonRows() {
     var rows = '';
@@ -186,7 +190,8 @@ window.TarbiyahDt = function (selector, opts) {
     var qs = qsOf();
     if (!force && qs === lastQs) return;
     lastQs = qs;
-    if (push && window.history && history.replaceState) {
+    // Filter sengaja TIDAK ditulis ke alamat halaman (opts.keepUrl: true untuk mengaktifkannya kembali).
+    if (push && opts.keepUrl && window.history && history.replaceState) {
       history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
     }
     table.ajax.reload(null, true);
