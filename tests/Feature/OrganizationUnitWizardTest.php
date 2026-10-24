@@ -117,4 +117,44 @@ class OrganizationUnitWizardTest extends TestCase
 
         $this->assertDatabaseHas('organizational_units', ['code' => 'KOMWIL-SULSEL', 'parent_id' => $pb->id]);
     }
+
+    public function test_units_index_has_add_unit_wizard_modal_with_parent_choices(): void
+    {
+        $pb = $this->makePb('PB-1');
+
+        $this->get(route('admin.organization.units.index'))
+            ->assertOk()
+            ->assertSee('id="orgAddModal"', false)
+            ->assertSee('id="orgAddSteps"', false)
+            ->assertSee('data-bs-target="#orgAddModal"', false)
+            ->assertSee('value="'.$pb->id.'"', false)
+            ->assertSee('Unit induk');
+
+        // Tampilan tabel memakai wizard yang sama.
+        $this->get(route('admin.organization.units.index', ['view' => 'table']))
+            ->assertOk()
+            ->assertSee('id="orgAddModal"', false);
+    }
+
+    public function test_wizard_from_units_index_returns_to_units_index(): void
+    {
+        $pb = $this->makePb('PB-1');
+
+        $this->post(route('admin.organization.units.store'), [
+            'from_modal' => 1, 'return_to' => 'units',
+            'type_id' => $this->komwil->id, 'parent_id' => $pb->id, 'code' => 'KOMWIL-A', 'name' => 'KOMWIL A', 'status' => 'active',
+        ])->assertRedirect(route('admin.organization.units.index'));
+
+        $this->assertDatabaseHas('organizational_units', ['code' => 'KOMWIL-A', 'parent_id' => $pb->id]);
+    }
+
+    public function test_wizard_rejects_type_not_allowed_under_chosen_parent(): void
+    {
+        $pb = $this->makePb('PB-1');
+
+        $this->post(route('admin.organization.units.store'), [
+            'from_modal' => 1, 'return_to' => 'units',
+            'type_id' => $this->pb->id, 'parent_id' => $pb->id, 'code' => 'PB-2', 'name' => 'PB Kedua', 'status' => 'active',
+        ])->assertSessionHasErrors('parent_id');
+    }
 }

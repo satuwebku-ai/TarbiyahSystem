@@ -175,7 +175,8 @@ class OrganizationStructureTest extends TestCase
             ->assertSee('KOMDA Anggrek')
             ->assertSee('KOMWIL Alpha')
             ->assertSee('Pengurus Besar Induk')
-            ->assertDontSee('KOMWIL Beta');
+            // Wizard memuat semua induk yang sah, jadi cek pada bagan: tombol tambah milik saudara yang tidak cocok tidak tampil.
+            ->assertDontSee('title="Tambah unit di bawah KOMWIL Beta"', false);
 
         // Tampilan tabel tetap tersedia.
         $this->get(route('admin.organization.units.index', ['view' => 'table']))

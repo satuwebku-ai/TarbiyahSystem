@@ -2,7 +2,11 @@
 @section('title', 'Unit Organisasi')
 @section('actions')
   @can('organization.units.manage')
-    <a href="{{ route('admin.organization.units.create') }}" class="btn btn-primary btn-sm"><x-icon name="plus" size="15" class="me-1"/>Tambah unit</a>
+    @if (($addable ?? []) || ($rootTypes ?? []))
+      <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#orgAddModal"><x-icon name="plus" size="15" class="me-1"/>Tambah unit</button>
+    @else
+      <a href="{{ route('admin.organization.units.create') }}" class="btn btn-primary btn-sm"><x-icon name="plus" size="15" class="me-1"/>Tambah unit</a>
+    @endif
   @endcan
 @endsection
 @section('content')
@@ -108,9 +112,7 @@
   </div>
   @endif
 
-  @if ($view === 'tree')
-    @include('admin.organization.partials.add-unit-modal')
-  @endif
+  @include('admin.organization.partials.add-unit-modal', ['returnTo' => 'units'])
 @endsection
 
 @push('scripts')

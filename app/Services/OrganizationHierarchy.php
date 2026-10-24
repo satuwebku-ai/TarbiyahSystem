@@ -214,6 +214,46 @@ class OrganizationHierarchy
     }
 
     /**
+     * Pilihan unit induk untuk wizard tambah unit: hanya unit yang boleh diberi turunan,
+     * lengkap dengan jalur induknya agar mudah dicari dan dibedakan.
+     *
+     * @param  Collection<int, OrganizationalUnit>  $units
+     * @param  array<int, array<int, array<string, mixed>>>  $addable  hasil addOptions()[0]
+     * @return array<int, array{id: int, name: string, code: string, path: string, depth: int, type_ids: int[]}>
+     */
+    public function parentChoices(Collection $units, array $addable): array
+    {
+        $byId = $units->keyBy('id');
+        $choices = [];
+
+        foreach ($units as $unit) {
+            if (! isset($addable[$unit->id])) {
+                continue;
+            }
+
+            $names = [];
+            $cursor = $unit;
+            for ($guard = 0; $cursor && $guard < 25; $guard++) {
+                array_unshift($names, $cursor->name);
+                $cursor = $cursor->parent_id ? $byId->get($cursor->parent_id) : null;
+            }
+
+            $choices[] = [
+                'id' => (int) $unit->id,
+                'name' => (string) $unit->name,
+                'code' => (string) $unit->code,
+                'path' => implode(' › ', $names),
+                'depth' => count($names) - 1,
+                'type_ids' => array_map('intval', array_column($addable[$unit->id], 'id')),
+            ];
+        }
+
+        usort($choices, fn (array $a, array $b) => strnatcasecmp($a['path'], $b['path']));
+
+        return $choices;
+    }
+
+    /**
      * Jenis yang boleh dibuat tepat di bawah unit dengan slug tertentu.
      *
      * @param  Collection<int, OrganizationalUnitType>  $activeTypes

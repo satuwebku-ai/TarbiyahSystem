@@ -74,10 +74,24 @@ class OrganizationalUnitController extends Controller
                 ->make(true);
         }
 
+        // Tombol "Tambah unit" di tampilan tabel memakai wizard yang sama dengan bagan.
+        $scoped = OrganizationalUnit::query()->with('type:id,slug,name')->orderBy('name');
+        $this->applyScope($scoped, $visibleIds);
+        $all = $scoped->get();
+        [$addable, $rootTypes] = $this->hierarchy->addOptions(
+            $all,
+            $admin->can('organization.units.manage'),
+            $visibleIds === null,
+        );
+
         return view('admin.organization.units.index', [
             'view' => 'table',
             'types' => $types,
             'filters' => $request->only(['search', 'type_id', 'status']),
+            'addable' => $addable,
+            'rootTypes' => $rootTypes,
+            'parentChoices' => $this->hierarchy->parentChoices($all, $addable),
+            'unitNames' => $all->pluck('name', 'id')->all(),
         ]);
     }
 
@@ -145,6 +159,7 @@ class OrganizationalUnitController extends Controller
             'shownCount' => $included->count(),
             'addable' => $addable,
             'rootTypes' => $rootTypes,
+            'parentChoices' => $this->hierarchy->parentChoices($all, $addable),
             'unitNames' => $all->pluck('name', 'id')->all(),
             'ownInvalidIds' => $this->hierarchy->audit()['own'],
         ]);
@@ -207,6 +222,10 @@ class OrganizationalUnitController extends Controller
 
             return $unit;
         });
+
+        if ($request->input('return_to') === 'units') {
+            return redirect()->route('admin.organization.units.index')->with('success', "{$unit->name} berhasil ditambahkan.");
+        }
 
         if ($request->input('return_to') === 'organization') {
             return redirect()->route('admin.organization.index')->with('success', "{$unit->name} berhasil ditambahkan ke bagan.");

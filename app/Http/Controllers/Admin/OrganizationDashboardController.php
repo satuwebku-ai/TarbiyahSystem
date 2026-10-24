@@ -41,6 +41,7 @@ class OrganizationDashboardController extends Controller
         return view('admin.organization.index', [
             'addable' => $addable,
             'rootTypes' => $rootTypes,
+            'parentChoices' => $hierarchy->parentChoices($units, $addable),
             'unitNames' => $units->pluck('name', 'id')->all(),
             'invalidUnits' => $units->whereIn('id', $audit['own'])->values(),
             'ownInvalidIds' => $audit['own'],
