@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasRoles;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -11,7 +10,7 @@ use Illuminate\Notifications\Notifiable;
 /** Akun login pelajar (guard "pelajar", portal pelajar.<domain>) — masuk memakai NIS. Data orangnya ada di Student. */
 class StudentAccount extends Authenticatable
 {
-    use HasFactory, HasRoles, Notifiable;
+    use HasRoles, Notifiable;
 
     protected $table = 'student_accounts';
 

@@ -36,9 +36,4 @@ class Classroom extends Model
     {
         return $this->hasMany(StudentClassPlacement::class);
     }
-
-    public function attendanceSessions(): HasMany
-    {
-        return $this->hasMany(StudentAttendanceSession::class);
-    }
 }

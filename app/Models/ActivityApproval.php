@@ -30,11 +30,6 @@ class ActivityApproval extends Model
         return $this->belongsTo(WorkActivity::class, 'work_activity_id');
     }
 
-    public function requester(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'requested_by_admin_id');
-    }
-
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(Admin::class, 'reviewed_by_admin_id');

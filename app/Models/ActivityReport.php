@@ -32,14 +32,4 @@ class ActivityReport extends Model
     {
         return $this->belongsTo(WorkActivity::class, 'work_activity_id');
     }
-
-    public function submitter(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'submitted_by_admin_id');
-    }
-
-    public function evaluator(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'evaluated_by_admin_id');
-    }
 }

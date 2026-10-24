@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Models\Concerns\HasRoles;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -13,7 +12,7 @@ use Illuminate\Support\Str;
 /** Akun login pegawai dan guru (guard "pegawai", portal pegawai.<domain>). Data orangnya ada di Employee. */
 class User extends Authenticatable
 {
-    use HasFactory, HasRoles, Notifiable;
+    use HasRoles, Notifiable;
 
     protected string $guardName = 'pegawai';
 

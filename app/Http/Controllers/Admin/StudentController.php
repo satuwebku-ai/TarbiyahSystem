@@ -3,14 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\AcademicYear;
 use App\Models\AdminAuditLog;
-use App\Models\Classroom;
 use App\Models\School;
 use App\Models\Student;
 use App\Models\StudentClassPlacement;
 use App\Models\StudentEnrollment;
-use App\Models\StudentGuardian;
 use App\Models\StudentAccount;
 use App\Services\OrganizationAccess;
 use App\Services\SchoolScope;

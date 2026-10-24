@@ -54,9 +54,4 @@ class Student extends Model
     {
         return $this->hasMany(StudentEnrollment::class)->orderByDesc('created_at');
     }
-
-    public function attendanceRecords(): HasMany
-    {
-        return $this->hasMany(StudentAttendanceRecord::class);
-    }
 }

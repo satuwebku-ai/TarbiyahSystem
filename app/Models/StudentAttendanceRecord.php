@@ -37,11 +37,6 @@ class StudentAttendanceRecord extends Model
         return $this->belongsTo(Student::class);
     }
 
-    public function recordedBy(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'recorded_by_admin_id');
-    }
-
     public function corrections(): HasMany
     {
         return $this->hasMany(StudentAttendanceCorrection::class)->latest();

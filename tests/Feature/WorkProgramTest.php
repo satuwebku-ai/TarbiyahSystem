@@ -11,7 +11,6 @@ use App\Models\UserUnitAccess;
 use App\Models\WorkActivity;
 use App\Models\WorkProgram;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WorkProgramTest extends TestCase

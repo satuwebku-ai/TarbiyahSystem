@@ -8,7 +8,6 @@ use App\Events\ActivityReportSubmitted;
 use App\Models\ActivityBudgetItem;
 use App\Models\ActivityDocument;
 use App\Models\ActivityParticipant;
-use App\Models\ActivityReport;
 use App\Models\AdminAuditLog;
 use App\Models\Employee;
 use App\Models\WorkActivity;
