@@ -2,11 +2,7 @@
 @section('title', 'Unit Organisasi')
 @section('actions')
   @can('organization.units.manage')
-    @if (($addable ?? []) || ($rootTypes ?? []))
-      <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#orgAddModal"><x-icon name="plus" size="15" class="me-1"/>Tambah unit</button>
-    @else
-      <a href="{{ route('admin.organization.units.create') }}" class="btn btn-primary btn-sm"><x-icon name="plus" size="15" class="me-1"/>Tambah unit</a>
-    @endif
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#orgAddModal"><x-icon name="plus" size="15" class="me-1"/>Tambah unit</button>
   @endcan
 @endsection
 @section('content')

@@ -7,6 +7,9 @@
   $returnTo = $returnTo ?? 'organization';
   $catalog = collect($addable ?? [])->flatten(1)->merge($rootTypes ?? [])->unique('id')->keyBy('id')->all();
   $rootTypeIds = collect($rootTypes ?? [])->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+  $hasParentOptions = ! empty($parentChoices) || ! empty($rootTypes);
+  $activeTypeCount = \App\Models\OrganizationalUnitType::query()->where('is_active', true)->count();
+  $canManageTypes = auth('admin')->user()?->can('organization.types.manage') ?? false;
   $reopen = null;
   if (old('from_modal')) {
       $oldParent = old('parent_id');
@@ -22,7 +25,7 @@
       ];
   }
 @endphp
-@if (($addable ?? []) || ($rootTypes ?? []))
+@can('organization.units.manage')
   <div class="modal fade" id="orgAddModal" tabindex="-1" aria-labelledby="orgAddTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <form method="POST" action="{{ route('admin.organization.units.store') }}" class="modal-content" id="orgAddForm" novalidate>
@@ -58,8 +61,25 @@
           <section class="ow-panel" data-step="1">
             <h6 class="mb-1">1. Di bawah unit mana unit baru ditempatkan?</h6>
             <p class="text-secondary small">Pilih unit induk lebih dulu. Jenis unit di langkah berikutnya menyesuaikan pilihan ini, jadi hanya kombinasi yang sah yang tampil.</p>
+            @unless ($hasParentOptions)
+              <div class="alert alert-warning small" role="alert" id="orgAddNoParent">
+                @if ($activeTypeCount === 0)
+                  <div class="fw-semibold mb-1">Belum ada jenis unit aktif</div>
+                  <div>Unit belum bisa dibuat sebelum ada jenis unit (mis. Pengurus Besar, KOMWIL, KOMDA). Buat jenis unitnya lebih dulu.</div>
+                  @if ($canManageTypes)
+                    <a href="{{ route('admin.organization.unit-types.create') }}" class="btn btn-sm btn-warning mt-2">Buat jenis unit</a>
+                  @else
+                    <div class="mt-1">Hubungi pengelola yang berwenang mengelola jenis unit.</div>
+                  @endif
+                @else
+                  <div class="fw-semibold mb-1">Belum ada unit induk yang bisa diberi turunan</div>
+                  <div>Unit induk belum dibuat, berstatus nonaktif, hierarkinya bermasalah, atau di luar cakupan akses Anda. Buat atau aktifkan unit induknya lebih dulu, lalu kembali ke sini.</div>
+                  <a href="{{ route('admin.organization.units.index', ['view' => 'tree']) }}" class="btn btn-sm btn-warning mt-2">Lihat bagan unit</a>
+                @endif
+              </div>
+            @endunless
             <label for="orgAddParentPick" class="form-label fw-semibold">Unit induk <span class="text-danger">*</span></label>
-            <select id="orgAddParentPick" class="form-select" data-placeholder="Ketik nama atau kode unit induk…">
+            <select id="orgAddParentPick" class="form-select" data-placeholder="Ketik nama atau kode unit induk…" @disabled(! $hasParentOptions)>
               <option value=""></option>
               @if ($rootTypes ?? [])
                 <option value="root" data-name="Tanpa induk" data-code="" data-path="Unit tingkat teratas" data-depth="0">Tanpa induk (unit tingkat teratas)</option>
@@ -70,6 +90,14 @@
               @endforeach
             </select>
             <div class="invalid-feedback" data-fb="parent_id"></div>
+            @if ($hasParentOptions)
+              <div class="form-text mt-2">
+                Induk yang dicari tidak ada? Unit induk harus dibuat lebih dulu dan berstatus aktif.
+                @if ($rootTypes ?? [])
+                  Untuk unit tingkat paling atas, <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="orgAddPickRoot">mulai tanpa induk</button>.
+                @endif
+              </div>
+            @endif
           </section>
 
           {{-- Langkah 2 --}}
@@ -81,6 +109,14 @@
               <option value=""></option>
             </select>
             <div class="invalid-feedback" data-fb="type_id"></div>
+            <div class="form-text mt-2">
+              Jenis yang dicari tidak tampil? Pilih unit induk lain di langkah 1 (jenis mengikuti induk)
+              @if ($canManageTypes)
+                atau cek menu <a href="{{ route('admin.organization.unit-types.index') }}">Jenis Unit</a>.
+              @else
+                .
+              @endif
+            </div>
             <div class="alert alert-info small mt-3 mb-0" aria-live="polite">
               <strong id="orgAddGuidanceTitle">Pilih jenis unit</strong>
               <div id="orgAddGuidance" class="mt-1">Petunjuk pengisian muncul sesuai jenis yang dipilih.</div>
@@ -158,7 +194,7 @@
       </form>
     </div>
   </div>
-@endif
+@endcan
 @push('scripts')
 <style>
   .ow-steps { list-style: none; display: flex; margin: 0 0 1.25rem; padding: 0; }
@@ -194,6 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var rootTypeIds = @json($rootTypeIds);
   var checkUrl = @json(route('admin.organization.units.check-code'));
   var reopen = @json($reopen);
+  var noParent = @json(! $hasParentOptions);
   var CODE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
   var el = function (id) { return document.getElementById(id); };
@@ -291,7 +328,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ---------- validasi ----------
   var rules = {
-    1: function () { return pickSel.value ? [] : [['parent_id', 'Pilih unit induk, atau "Tanpa induk" untuk unit tingkat teratas.']]; },
+    1: function () { if (noParent) return [['parent_id', 'Belum ada unit induk yang tersedia. Buat unit induknya lebih dulu.']]; return pickSel.value ? [] : [['parent_id', 'Pilih unit induk, atau "Tanpa induk" untuk unit tingkat teratas.']]; },
     2: function () {
       if (!typeSel.value) return [['type_id', 'Pilih jenis unit terlebih dahulu.']];
       if (allowedTypeIds().map(String).indexOf(String(typeSel.value)) === -1) return [['type_id', 'Jenis ini tidak diizinkan di bawah unit induk yang dipilih.']];
@@ -356,6 +393,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     btnBack.classList.toggle('d-none', n === 1);
     btnNext.classList.toggle('d-none', n === 4);
+    btnNext.disabled = (n === 1 && noParent);
     btnSubmit.classList.toggle('d-none', n !== 4);
     if (n === 3) { applyType(); nameEl.focus(); }
     if (n === 4) { fillReview(); addrEl.focus(); }
@@ -384,12 +422,15 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // ---------- peristiwa ----------
-  onChange(pickSel, function () {
+  function afterPickChange() {
     clearErr('parent_id'); parentVal.value = isRoot() ? '' : pickSel.value;
     rebuildTypes(null); maxReached = 1; done = {}; stepEls.forEach(function (s) { s.classList.remove('is-done', 'is-error'); });
     if (pickSel.value) { done[1] = true; maxReached = 2; }
     go(1);
-  });
+  }
+  onChange(pickSel, afterPickChange);
+  var rootBtn = el('orgAddPickRoot');
+  if (rootBtn) rootBtn.addEventListener('click', function () { setPick('root'); if (pickSel.value === 'root') { afterPickChange(); btnNext.click(); } });
   onChange(typeSel, function () { clearErr('type_id'); applyType(); });
   nameEl.addEventListener('input', function () { clearErr('name'); });
   codeEl.addEventListener('input', onCodeInput);

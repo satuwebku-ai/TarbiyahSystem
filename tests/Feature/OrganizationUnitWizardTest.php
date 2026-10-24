@@ -157,4 +157,34 @@ class OrganizationUnitWizardTest extends TestCase
             'type_id' => $this->pb->id, 'parent_id' => $pb->id, 'code' => 'PB-2', 'name' => 'PB Kedua', 'status' => 'active',
         ])->assertSessionHasErrors('parent_id');
     }
+
+    public function test_wizard_warns_and_links_to_unit_types_when_no_active_type_exists(): void
+    {
+        OrganizationalUnitType::query()->update(['is_active' => false]);
+
+        $this->get(route('admin.organization.units.index'))
+            ->assertOk()
+            ->assertSee('id="orgAddNoParent"', false)
+            ->assertSee('Belum ada jenis unit aktif')
+            ->assertSee(route('admin.organization.unit-types.create'), false);
+    }
+
+    public function test_wizard_warns_when_no_parent_unit_can_take_children(): void
+    {
+        OrganizationalUnit::query()->create(['type_id' => $this->pb->id, 'code' => 'PB-1', 'name' => 'Pengurus Besar', 'status' => 'inactive']);
+
+        $this->get(route('admin.organization.units.index'))
+            ->assertOk()
+            ->assertSee('id="orgAddNoParent"', false)
+            ->assertSee('Belum ada unit induk yang bisa diberi turunan');
+    }
+
+    public function test_wizard_has_no_warning_when_a_parent_exists(): void
+    {
+        $this->makePb('PB-1');
+
+        $this->get(route('admin.organization.units.index'))
+            ->assertOk()
+            ->assertDontSee('id="orgAddNoParent"', false);
+    }
 }
