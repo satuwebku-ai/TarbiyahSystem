@@ -9,7 +9,7 @@
   <div class="mb-3">@include('admin.organization.partials.setup-steps', ['active' => 'assignments', 'compact' => true])</div>
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form method="GET" id="assignmentFilter" action="{{ route('admin.organization.assignments.index') }}" class="row g-2 align-items-end">
+      <form method="GET" id="assignmentFilter" action="{{ route('admin.organization.assignments.index') }}" class="row g-2 align-items-end" @if ($view === 'tree') data-ajax-filter data-ajax-nopush @endif>
         <input type="hidden" name="view" value="{{ $view }}">
         <div class="col-md-5">
           <label for="unit_id" class="form-label small mb-1">Unit</label>
@@ -29,7 +29,7 @@
         @if ($view === 'tree')
         <div class="col-md-3">
           <label for="search" class="form-label small mb-1">Cari</label>
-          <input id="search" name="search" value="{{ $filters['search'] ?? '' }}" class="form-control" placeholder="Nama, jabatan, atau unit">
+          <input id="search" name="search" value="{{ $filters['search'] ?? '' }}" class="form-control" placeholder="Nama, jabatan, atau unit" autocomplete="off" data-ajax-live>
         </div>
         @endif
         <div class="col-auto d-flex gap-2">
@@ -40,6 +40,8 @@
     </div>
   </div>
 
+  <div data-ajax-region>
+  @fragment('table')
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div class="small text-secondary">
       @if ($view === 'tree' && count($scopeRoots))
@@ -93,12 +95,15 @@
     </div>
   </div>
   @endif
+  @endfragment
+  </div>
 @endsection
 
 @push('scripts')
   @if ($view === 'tree')
     @include('admin.organization.partials.tree-styles')
     @include('admin.organization.partials.tree-scripts')
+    @include('partials.admin.ajax-table')
     <style>
       .org-tree-row.org-match { background:rgba(var(--bs-warning-rgb),.15); }
       .org-tree-meta { flex:0 0 auto; }

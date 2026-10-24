@@ -66,6 +66,12 @@
         clearTimeout(timer);
         timer = setTimeout(function () { load(formUrl(), pushUrl, false); }, 250);
       });
+    } else {
+      form.addEventListener('change', function (e) {
+        if (!e.target.matches('select, input:not([type=hidden])')) return;
+        clearTimeout(timer);
+        timer = setTimeout(function () { load(formUrl(), pushUrl, false); }, 250);
+      });
     }
   }
 

@@ -27,7 +27,7 @@ use Yajra\DataTables\Facades\DataTables;
 
 class OrganizationalAssignmentController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse|string
     {
         $visibleIds = $access->visibleUnitIds(auth('admin')->user());
         $visibleUnits = $this->visibleUnits($visibleIds);
@@ -132,7 +132,7 @@ class OrganizationalAssignmentController extends Controller
             'filtered' => $search !== '' || $status !== null,
             'scopeRoots' => $scopeRoots,
             'assignmentCount' => $assignments->flatten(1)->count(),
-        ]);
+        ])->fragmentIf($request->ajax(), 'table');
     }
 
     public function create(Request $request, OrganizationAccess $access): View

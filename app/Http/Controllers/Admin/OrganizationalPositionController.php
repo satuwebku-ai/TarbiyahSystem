@@ -20,7 +20,7 @@ use Yajra\DataTables\Facades\DataTables;
 
 class OrganizationalPositionController extends Controller
 {
-    public function index(Request $request, OrganizationAccess $access): View|JsonResponse
+    public function index(Request $request, OrganizationAccess $access): View|JsonResponse|string
     {
         $visibleIds = $access->visibleUnitIds(auth('admin')->user());
 
@@ -69,7 +69,7 @@ class OrganizationalPositionController extends Controller
      * sekolahnya, sedangkan pimpinan sekolah hanya melihat sekolahnya (jabatan, guru, dan
      * tenaga kependidikan).
      */
-    private function treeIndex(Request $request, OrganizationAccess $access, ?array $visibleIds): View
+    private function treeIndex(Request $request, OrganizationAccess $access, ?array $visibleIds): View|string
     {
         $admin = auth('admin')->user();
         $unitQuery = OrganizationalUnit::query()->with('type:id,name')->orderBy('name');
@@ -196,7 +196,7 @@ class OrganizationalPositionController extends Controller
             'canManagePositions' => $admin->can('organization.positions.manage'),
             'canManageAssignments' => $admin->can('organization.assignments.manage'),
             'positionCount' => $positions->count(),
-        ]);
+        ])->fragmentIf($request->ajax(), 'table');
     }
 
     /** @param  string[]  $names */
