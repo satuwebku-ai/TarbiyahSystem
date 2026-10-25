@@ -23,5 +23,7 @@ Schedule::command('student-attendance:close-day')->everyFiveMinutes()->timezone(
 // Berkas memuat data pribadi & hash kata sandi: salin juga ke luar server (akses terbatas).
 Schedule::command('db:backup')->dailyAt('01:00')->timezone($tz)->withoutOverlapping();
 Schedule::command('fingerprint:prune-pending')->dailyAt('03:00')->timezone($tz)->withoutOverlapping();
+// Foto selfie absen dihapus setelah masa simpan (ATTENDANCE_PHOTO_RETENTION_DAYS, bawaan 90 hari).
+Schedule::command('attendance:prune-photos')->dailyAt('03:30')->timezone($tz)->withoutOverlapping();
 Schedule::command('notifications:prune')->weeklyOn(0, '02:00')->timezone($tz)->withoutOverlapping();
 Schedule::command('queue:prune-failed', ['--hours' => 720])->weeklyOn(0, '02:30')->timezone($tz);

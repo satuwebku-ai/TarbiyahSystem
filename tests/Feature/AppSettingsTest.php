@@ -134,6 +134,31 @@ class AppSettingsTest extends TestCase
         $this->assertStringNotContainsString('Madrasah Baru', json_encode($log->details));
     }
 
+    public function test_attendance_group_saves_validates_and_applies_to_config(): void
+    {
+        $this->actingAs($this->settingsAdmin(), 'admin');
+        $valid = [
+            'attendance_photo_retention_days' => 30, 'attendance_max_gps_accuracy' => 80,
+            'attendance_photo_reject_duplicate' => '1', 'attendance_photo_flag_suspicious' => '1',
+            // attendance_photo_watermark tidak dikirim = dimatikan
+        ];
+
+        $this->put(route('admin.settings.update', 'absensi'), $valid)
+            ->assertRedirect(route('admin.settings.index', ['tab' => 'absensi']))->assertSessionHas('success');
+
+        $this->app->make(AppSettings::class)->apply();
+        $this->assertSame(30, config('attendance.photo_retention_days'));
+        $this->assertSame(80, config('attendance.max_gps_accuracy_m'));
+        $this->assertFalse(config('attendance.photo_watermark'));
+        $this->assertTrue(config('attendance.photo_reject_duplicate'));
+        $this->get(route('admin.settings.index', ['tab' => 'absensi']))->assertOk()->assertSee('Masa simpan foto selfie');
+
+        $before = AppSetting::count();
+        $this->put(route('admin.settings.update', 'absensi'), ['attendance_photo_retention_days' => -1, 'attendance_max_gps_accuracy' => 1] + $valid)
+            ->assertSessionHasErrors(['attendance_photo_retention_days', 'attendance_max_gps_accuracy']);
+        $this->assertSame($before, AppSetting::count());
+    }
+
     public function test_saving_identical_values_changes_nothing_and_writes_no_audit_entry(): void
     {
         $this->actingAs($this->settingsAdmin(), 'admin');

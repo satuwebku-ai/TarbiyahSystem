@@ -529,6 +529,103 @@ class AttendanceTest extends TestCase
             ->get(route('admin.attendance.photo', [$record, 'in']))->assertForbidden();
     }
 
+    public function test_reused_photo_is_rejected_and_gallery_like_photo_is_flagged_for_admin(): void
+    {
+        Storage::fake('local');
+        $this->global->update(['require_photo' => true]);
+        [$user] = $this->linkedEmployee($this->unitA);
+        $this->actingAs($user, 'pegawai');
+        Carbon::setTestNow('2026-10-21 00:10:00');
+
+        $img = imagecreatetruecolor(1200, 900); // lebih lebar dari hasil canvas portal (640 px)
+        ob_start();
+        imagejpeg($img);
+        $bytes = ob_get_clean();
+        $upload = function () use ($bytes) {
+            $tmp = tempnam(sys_get_temp_dir(), 'ph');
+            file_put_contents($tmp, $bytes);
+
+            return new UploadedFile($tmp, 'selfie.jpg', 'image/jpeg', null, true);
+        };
+
+        $this->post(route('pegawai.check-in'), ['photo' => $upload()])->assertSessionHasNoErrors();
+        $record = AttendanceRecord::firstOrFail();
+        $this->assertSame(64, strlen($record->check_in_photo_hash));
+        $this->assertStringContainsString('ukuran', (string) $record->check_in_photo_flag);
+        Storage::disk('local')->assertExists($record->check_in_photo);
+
+        $this->actingAs($this->makeAdmin(['attendance.view'], $this->unitA), 'admin')
+            ->get(route('admin.attendance.daily', ['date' => '2026-10-21']))->assertOk()->assertSee('Foto perlu dicek');
+
+        // berkas identik tidak boleh dipakai lagi untuk check-out; foto baru diterima
+        $this->actingAs($user, 'pegawai');
+        Carbon::setTestNow('2026-10-21 08:00:00');
+        $this->withSession(['pegawai_last_activity' => now()->timestamp])->post(route('pegawai.check-out'), ['photo' => $upload()])
+            ->assertSessionHasErrors('photo');
+        $this->assertNull($record->fresh()->check_out_at);
+        $this->post(route('pegawai.check-out'), ['photo' => UploadedFile::fake()->image('baru.jpg', 320, 240)])->assertSessionHasNoErrors();
+        $this->assertNotNull($record->fresh()->check_out_at);
+    }
+
+    public function test_photo_checks_can_be_switched_off_from_settings(): void
+    {
+        Storage::fake('local');
+        config(['attendance.photo_reject_duplicate' => false, 'attendance.photo_flag_suspicious' => false, 'attendance.photo_watermark' => false]);
+        $this->global->update(['require_photo' => true]);
+        [$user] = $this->linkedEmployee($this->unitA);
+        $this->actingAs($user, 'pegawai');
+        Carbon::setTestNow('2026-10-21 00:10:00');
+
+        $img = imagecreatetruecolor(1200, 900);
+        ob_start();
+        imagejpeg($img);
+        $bytes = ob_get_clean();
+        $upload = function () use ($bytes) {
+            $tmp = tempnam(sys_get_temp_dir(), 'ph');
+            file_put_contents($tmp, $bytes);
+
+            return new UploadedFile($tmp, 'selfie.jpg', 'image/jpeg', null, true);
+        };
+
+        $this->post(route('pegawai.check-in'), ['photo' => $upload()])->assertSessionHasNoErrors();
+        $record = AttendanceRecord::firstOrFail();
+        $this->assertNull($record->check_in_photo_flag);          // penandaan dimatikan
+        $this->assertSame(strlen($bytes), strlen(Storage::disk('local')->get($record->check_in_photo))); // tanpa watermark: berkas asli
+
+        Carbon::setTestNow('2026-10-21 08:00:00');
+        $this->withSession(['pegawai_last_activity' => now()->timestamp])->post(route('pegawai.check-out'), ['photo' => $upload()])
+            ->assertSessionHasNoErrors();                          // penolakan duplikat dimatikan
+        $this->assertNotNull($record->fresh()->check_out_at);
+    }
+
+    public function test_prune_command_deletes_only_photos_older_than_retention_and_keeps_attendance_data(): void
+    {
+        Storage::fake('local');
+        [, $employee] = $this->linkedEmployee($this->unitA);
+        Carbon::setTestNow('2026-10-25 02:00:00');
+        $disk = Storage::disk('local');
+        $disk->put('attendance-proofs/2026-06-01/1/a.jpg', 'x');
+        $disk->put('attendance-proofs/2026-10-20/1/b.jpg', 'y');
+        $mk = fn (string $date, string $photo) => AttendanceRecord::create([
+            'employee_id' => $employee->id, 'attendance_date' => $date, 'status' => 'present', 'source' => 'web',
+            'check_in_photo' => $photo, 'check_in_photo_hash' => hash('sha256', $photo), 'check_in_lat' => -0.8917,
+        ]);
+        $old = $mk('2026-06-01', 'attendance-proofs/2026-06-01/1/a.jpg');
+        $recent = $mk('2026-10-20', 'attendance-proofs/2026-10-20/1/b.jpg');
+
+        $this->artisan('attendance:prune-photos', ['--days' => 90, '--dry-run' => true])->assertExitCode(0);
+        $disk->assertExists('attendance-proofs/2026-06-01/1/a.jpg');
+
+        $this->artisan('attendance:prune-photos', ['--days' => 90])->assertExitCode(0);
+        $disk->assertMissing('attendance-proofs/2026-06-01/1/a.jpg');
+        $disk->assertMissing('attendance-proofs/2026-06-01'); // folder kosong ikut dihapus
+        $disk->assertExists('attendance-proofs/2026-10-20/1/b.jpg');
+        $this->assertNull($old->fresh()->check_in_photo);
+        $this->assertNotNull($old->fresh()->check_in_photo_hash); // sidik tetap ada: foto lama tetap tak bisa dipakai ulang
+        $this->assertEqualsWithDelta(-0.8917, (float) $old->fresh()->check_in_lat, 0.0001);
+        $this->assertNotNull($recent->fresh()->check_in_photo);
+    }
+
     private function makePolicy(OrganizationalUnit $unit, string $timezone): AttendancePolicy
     {
         return AttendancePolicy::create([

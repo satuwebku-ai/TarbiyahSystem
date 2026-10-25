@@ -29,6 +29,38 @@ return [
             ],
         ],
 
+        'absensi' => [
+            'label' => 'Absensi Pegawai',
+            'description' => 'Pemeriksaan foto selfie dan GPS pada absen pegawai. Wajib-tidaknya foto/lokasi, titik sekolah, dan radius diatur per unit di menu Kebijakan Absensi.',
+            'fields' => [
+                'attendance_photo_retention_days' => [
+                    'label' => 'Masa simpan foto selfie (hari)', 'type' => 'number', 'config' => ['attendance.photo_retention_days'],
+                    'rules' => ['required', 'integer', 'between:0,3650'],
+                    'help' => 'Foto yang lebih lama dihapus otomatis setiap hari pukul 03:30 (butuh cron schedule:run aktif). Data absen, lokasi, dan sidik foto tetap tersimpan. Isi 0 untuk menyimpan foto tanpa batas.',
+                ],
+                'attendance_max_gps_accuracy' => [
+                    'label' => 'Akurasi GPS terburuk yang diterima (meter)', 'type' => 'number', 'config' => ['attendance.max_gps_accuracy_m'],
+                    'rules' => ['required', 'integer', 'between:10,5000'],
+                    'help' => 'Berlaku untuk unit yang mewajibkan lokasi. Makin kecil makin ketat, tetapi pegawai di dalam gedung lebih sering ditolak.',
+                ],
+                'attendance_photo_reject_duplicate' => [
+                    'label' => 'Tolak foto yang sama dengan foto absen sebelumnya', 'type' => 'bool', 'config' => ['attendance.photo_reject_duplicate'],
+                    'rules' => ['boolean'],
+                    'help' => 'Kamera tidak pernah menghasilkan dua berkas identik, jadi berkas yang sama persis berarti foto dipakai ulang.',
+                ],
+                'attendance_photo_flag_suspicious' => [
+                    'label' => 'Tandai foto yang berciri galeri', 'type' => 'bool', 'config' => ['attendance.photo_flag_suspicious'],
+                    'rules' => ['boolean'],
+                    'help' => 'Foto dengan metadata EXIF, lebar lebih dari 640 px, atau bukan JPEG tetap diterima, tetapi muncul lencana "Foto perlu dicek" di laporan harian. Ini petunjuk, bukan bukti.',
+                ],
+                'attendance_photo_watermark' => [
+                    'label' => 'Bubuhkan watermark pada foto', 'type' => 'bool', 'config' => ['attendance.photo_watermark'],
+                    'rules' => ['boolean'],
+                    'help' => 'Nama pegawai, MASUK/PULANG, dan waktu server dituliskan di bagian bawah foto yang disimpan. Hanya berlaku untuk absen berikutnya.',
+                ],
+            ],
+        ],
+
         'email' => [
             'label' => 'Email',
             'description' => 'Pengiriman email notifikasi. Email dikirim lewat antrean, jadi worker antrean harus hidup.',

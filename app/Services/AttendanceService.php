@@ -21,11 +21,12 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceService
 {
-    public function __construct(private AttendancePolicyResolver $resolver) {}
+    public function __construct(private AttendancePolicyResolver $resolver, private AttendancePhotoGuard $photoGuard) {}
 
     // ---- absen sendiri -------------------------------------------------
 
@@ -48,10 +49,10 @@ class AttendanceService
                 }
 
                 [$status, $late] = $this->evaluateIn($date, $policy, $now);
-                $photo = $this->storePhoto($proof['photo'] ?? null, $date, $employee);
+                [$photo, $photoMeta] = $this->storePhoto($proof['photo'] ?? null, $date, $employee, $now, 'MASUK', 'check_in');
 
                 try {
-                    return AttendanceRecord::create($geo + ['check_in_photo' => $photo] + [
+                    return AttendanceRecord::create($geo + ['check_in_photo' => $photo] + $photoMeta + [
                     'employee_id' => $employee->id,
                     'organizational_unit_id' => $unitId,
                     'attendance_date' => $date,
@@ -94,10 +95,10 @@ class AttendanceService
             // Syarat lokasi/foto mengikuti kebijakan unit tempat check-in tercatat.
             $policy = $this->resolver->policyForUnit($record->organizational_unit_id);
             $geo = $this->verifyProof($policy, $proof, 'check_out');
-            $photo = $this->storePhoto($proof['photo'] ?? null, $record->attendance_date->toDateString(), $employee);
+            [$photo, $photoMeta] = $this->storePhoto($proof['photo'] ?? null, $record->attendance_date->toDateString(), $employee, $now, 'PULANG', 'check_out');
 
             try {
-                $record->update($geo + ['check_out_photo' => $photo] + [
+                $record->update($geo + ['check_out_photo' => $photo] + $photoMeta + [
                     'check_out_at' => AttendanceClock::toStorage($now),
                     'work_minutes' => $this->minutesBetween($record->check_in_at, $now),
                     'check_out_ip' => $ip,
@@ -363,9 +364,41 @@ class AttendanceService
         ];
     }
 
-    private function storePhoto(?UploadedFile $file, string $date, Employee $employee): ?string
+    /**
+     * Simpan foto selfie: tolak foto yang identik dengan foto absen sebelumnya, catat sidik & penanda
+     * kecurigaan (AttendancePhotoGuard), lalu bubuhkan waktu server pada salinan yang disimpan.
+     *
+     * @return array{0: ?string, 1: array<string, ?string>} path foto dan kolom sidik/penanda untuk record
+     */
+    private function storePhoto(?UploadedFile $file, string $date, Employee $employee, CarbonInterface $now, string $label, string $prefix): array
     {
-        return $file ? $file->store("attendance-proofs/{$date}/{$employee->id}", 'local') : null;
+        if (! $file) {
+            return [null, []];
+        }
+
+        $check = $this->photoGuard->inspect($file->getRealPath());
+
+        $used = AttendanceRecord::query()
+            ->where(fn ($q) => $q->where('check_in_photo_hash', $check['hash'])->orWhere('check_out_photo_hash', $check['hash']))
+            ->exists();
+        if ($used && config('attendance.photo_reject_duplicate')) {
+            $this->fail('photo', 'Foto ini sudah pernah dipakai untuk absen. Ambil foto baru langsung dari kamera.');
+        }
+
+        $dir = "attendance-proofs/{$date}/{$employee->id}";
+        $stamp = Str::ascii("{$employee->name} | {$label} | ".$now->format('Y-m-d H:i T'));
+        $jpeg = config('attendance.photo_watermark') ? $this->photoGuard->stamp($file->getRealPath(), $stamp) : null;
+        $path = $jpeg !== null
+            ? $dir.'/'.Str::random(40).'.jpg'
+            : $file->store($dir, 'local');
+        if ($jpeg !== null) {
+            Storage::disk('local')->put($path, $jpeg);
+        }
+
+        return [$path, [
+            "{$prefix}_photo_hash" => $check['hash'],
+            "{$prefix}_photo_flag" => $check['flags'] && config('attendance.photo_flag_suspicious') ? implode(',', $check['flags']) : null,
+        ]];
     }
 
     /** Jarak lingkaran besar (haversine) dalam meter. */
