@@ -195,7 +195,10 @@ class StudentAttendanceTest extends TestCase
         $this->get(route('admin.academic.student-attendance.index', [
             'classroom_id' => $otherClassroom->id,
             'date' => '2026-10-20',
-        ]))->assertNotFound();
+        ]))
+            // Kelas sekolah lain = 404, yang oleh bootstrap/app.php dialihkan ke dashboard dengan pesan galat.
+            ->assertRedirect(route('admin.dashboard'))
+            ->assertSessionHas('error');
     }
 
     public function test_attendance_submission_rejects_students_outside_the_roster(): void

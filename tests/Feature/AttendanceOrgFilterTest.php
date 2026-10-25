@@ -165,14 +165,14 @@ class AttendanceOrgFilterTest extends TestCase
         }
 
         $this->actingAs($this->admin(['attendance.corrections.review'], $this->u['kw1']), 'admin');
-        $this->get(route('admin.attendance.corrections.index'))->assertOk()
+        $this->dt('admin.attendance.corrections.index')->assertOk()
             ->assertSee('Guru Satu')->assertSee('Guru Tiga')->assertDontSee('Guru Empat');
-        $this->get(route('admin.attendance.corrections.index', ['school_id' => $this->s['s3']->id]))->assertOk()
+        $this->dt('admin.attendance.corrections.index', ['school_id' => $this->s['s3']->id])->assertOk()
             ->assertSee('Guru Tiga')->assertDontSee('Guru Satu');
-        // tab status membawa filter
+        // tab status digerakkan JS dan memakai filter form yang sama
         $this->get(route('admin.attendance.corrections.index', ['komda_id' => $this->u['kd1']->id]))
-            ->assertSee('komda_id='.$this->u['kd1']->id, false);
-        $this->get(route('admin.attendance.corrections.index', ['school_id' => $this->s['s4']->id]))->assertForbidden();
+            ->assertOk()->assertSee('data-dt-tab="status"', false);
+        $this->dt('admin.attendance.corrections.index', ['school_id' => $this->s['s4']->id])->assertForbidden();
     }
 
     // ---- izin / sakit / cuti -------------------------------------------
@@ -188,7 +188,8 @@ class AttendanceOrgFilterTest extends TestCase
 
         $this->actingAs($this->admin(['attendance.records.manage'], $this->u['kw1']), 'admin');
         $html = $this->get(route('admin.attendance.entries.index'))->assertOk()
-            ->assertSee('id="employee_id"', false)->assertSee('Catatan s1')->assertSee('Catatan s3')->getContent();
+            ->assertSee('id="employee_id"', false)->getContent();
+        $this->dt('admin.attendance.entries.index')->assertOk()->assertSee('Catatan s1')->assertSee('Catatan s3');
 
         $satu = Employee::where('name', 'Guru Satu')->first();
         $this->assertMatchesRegularExpression(
@@ -197,7 +198,7 @@ class AttendanceOrgFilterTest extends TestCase
         );
         $this->assertStringNotContainsString('Guru Empat', $html);
 
-        $this->get(route('admin.attendance.entries.index', ['komda_id' => $this->u['kd2']->id]))->assertOk()
+        $this->dt('admin.attendance.entries.index', ['komda_id' => $this->u['kd2']->id])->assertOk()
             ->assertSee('Catatan s3')->assertDontSee('Catatan s1');
     }
 
@@ -217,13 +218,13 @@ class AttendanceOrgFilterTest extends TestCase
 
         $this->actingAs($this->admin(['attendance.holidays.manage', 'attendance.policies.manage'], null, super: true), 'admin');
 
-        $this->get(route('admin.attendance.holidays.index', ['year' => 2026, 'school_id' => $this->s['s1']->id]))->assertOk()
+        $this->dt('admin.attendance.holidays.index', ['year' => 2026, 'school_id' => $this->s['s1']->id])->assertOk()
             ->assertSee('Libur Umum')->assertSee('Libur KW1')->assertSee('Libur KD1')->assertSee('Libur S1')
             ->assertDontSee('Libur S2')->assertDontSee('Libur KD2');
-        $this->get(route('admin.attendance.holidays.index', ['year' => 2026, 'komda_id' => $this->u['kd1']->id]))
+        $this->dt('admin.attendance.holidays.index', ['year' => 2026, 'komda_id' => $this->u['kd1']->id])
             ->assertSee('Libur S1')->assertSee('Libur S2')->assertDontSee('Libur KD2');
 
-        $this->get(route('admin.attendance.policies.index', ['school_id' => $this->s['s1']->id]))->assertOk()
+        $this->dt('admin.attendance.policies.index', ['school_id' => $this->s['s1']->id])->assertOk()
             ->assertSee('Kebijakan Umum')->assertSee('Kebijakan KD1')->assertSee('Kebijakan S1')->assertDontSee('Kebijakan KD2');
 
         // "Berlaku untuk" memakai Select2 pohon yang bisa dicari
@@ -242,32 +243,33 @@ class AttendanceOrgFilterTest extends TestCase
         AttendanceHoliday::create(['holiday_date' => '2026-10-10', 'name' => 'Libur Fragmen', 'organizational_unit_id' => $this->u['s1']->id]);
         AttendanceHoliday::create(['holiday_date' => '2026-10-11', 'name' => 'Libur Lain', 'organizational_unit_id' => $this->u['s3']->id]);
 
-        $pages = [
-            ['admin.attendance.daily', ['date' => '2026-10-20']],
-            ['admin.attendance.monthly', ['month' => '2026-10']],
-            ['admin.attendance.corrections.index', []],
-            ['admin.attendance.entries.index', []],
-            ['admin.attendance.holidays.index', ['year' => 2026]],
-            ['admin.attendance.policies.index', []],
-        ];
-        foreach ($pages as [$route, $query]) {
+        // Rekap harian & bulanan: halaman memuat ulang fragmen tabel lewat AJAX.
+        foreach ([['admin.attendance.daily', ['date' => '2026-10-20']], ['admin.attendance.monthly', ['month' => '2026-10']]] as [$route, $query]) {
             $query += ['school_id' => $this->s['s1']->id];
 
-            // halaman penuh: ada layout, region AJAX, dan form filter AJAX
             $this->get(route($route, $query))->assertOk()
                 ->assertSee('data-ajax-region', false)->assertSee('data-ajax-filter', false)
                 ->assertSee('<html', false)->assertSee('is-loading', false)->assertSee('XMLHttpRequest', false);
 
-            // permintaan AJAX: hanya fragmen tabel, tanpa layout
             $ajax = $this->get(route($route, $query), ['X-Requested-With' => 'XMLHttpRequest']);
             $ajax->assertOk()->assertDontSee('<html', false)->assertDontSee('id="sidebar"', false);
             $this->assertStringContainsString('<table', $ajax->getContent(), $route);
         }
 
+        // Koreksi, izin/sakit/cuti, hari libur, kebijakan: tabel DataTables, isinya JSON (bukan halaman penuh).
+        foreach (['admin.attendance.corrections.index', 'admin.attendance.entries.index', 'admin.attendance.holidays.index', 'admin.attendance.policies.index'] as $route) {
+            $query = ['school_id' => $this->s['s1']->id] + ($route === 'admin.attendance.holidays.index' ? ['year' => 2026] : []);
+
+            $this->get(route($route, $query))->assertOk()->assertSee('<html', false);
+            $this->dt($route, $query)->assertOk()
+                ->assertJsonStructure(['draw', 'recordsTotal', 'recordsFiltered', 'data'])
+                ->assertDontSee('<html', false);
+        }
+
         // fragmen tetap tersaring oleh filter bertingkat
         $daily = $this->get(route('admin.attendance.daily', ['date' => '2026-10-20', 'school_id' => $this->s['s2']->id]), ['X-Requested-With' => 'XMLHttpRequest']);
         $daily->assertSee('Guru Dua')->assertDontSee('Guru Satu')->assertDontSee('Guru Empat');
-        $holidays = $this->get(route('admin.attendance.holidays.index', ['year' => 2026, 'school_id' => $this->s['s1']->id]), ['X-Requested-With' => 'XMLHttpRequest']);
+        $holidays = $this->dt('admin.attendance.holidays.index', ['year' => 2026, 'school_id' => $this->s['s1']->id]);
         $holidays->assertSee('Libur Fragmen')->assertDontSee('Libur Lain');
     }
 
@@ -278,6 +280,12 @@ class AttendanceOrgFilterTest extends TestCase
     }
 
     // ---- helper --------------------------------------------------------
+
+    /** Tabel DataTables (server-side): isi baris dikirim sebagai JSON, bukan HTML halaman. */
+    private function dt(string $route, array $query = [])
+    {
+        return $this->getJson(route($route, $query + ['draw' => 1, 'start' => 0, 'length' => 100]));
+    }
 
     private function assertNames(array $seen, array $unseen, $response): void
     {

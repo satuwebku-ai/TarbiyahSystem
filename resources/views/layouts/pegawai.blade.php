@@ -2,6 +2,7 @@
 <html lang="id">
 <head>
   @include('partials.head')
+  @include('pegawai.pwa._head')
   <title>@yield('title') — {{ config('app.name', 'TarbiyahSystem') }}</title>
 </head>
 <body class="TarbiyahSystem-body d-flex flex-column min-vh-100">
@@ -93,6 +94,7 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+@include('pegawai.pwa._scripts')
 <script>
   document.getElementById('pegawaiThemeBtn').addEventListener('click', function () {
     var root = document.documentElement, dark = root.getAttribute('data-theme') === 'dark';

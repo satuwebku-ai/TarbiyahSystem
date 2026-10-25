@@ -42,3 +42,15 @@ Dapat dinyalakan per halaman: login, lupa kata sandi, pendaftaran pelajar. Halam
 - Bila layanan verifikasi tidak terjangkau, login ditolak (fail-closed).
 - CSP otomatis mengizinkan host penyedia yang dipilih; tanpa CAPTCHA CSP tidak berubah.
 - Salah kunci dan terkunci dari login: `php artisan security:recover --captcha`.
+
+## PWA portal pegawai (pasang di layar utama HP)
+
+Portal pegawai bisa dipasang seperti aplikasi: ikon di layar utama, terbuka tanpa bilah alamat. Kamera selfie dan GPS tetap
+berjalan karena memakai halaman web yang sama.
+
+- Wajib **HTTPS** (kamera, GPS, dan service worker tidak jalan di HTTP biasa, kecuali `localhost`).
+- Android/Chrome: spanduk "Pasang aplikasi" muncul di halaman portal. iPhone/iPad: Safari > Bagikan > Tambahkan ke Layar Utama.
+- Service worker hanya menampilkan halaman "tidak ada koneksi" saat internet putus. Halaman portal **tidak pernah disimpan**
+  di perangkat (berisi data pribadi). Absen tetap butuh internet.
+- Berkas: `/pegawai/manifest.webmanifest`, `/pegawai/sw.js`, `/pegawai/offline` (mode subdomain: tanpa awalan `/pegawai`), ikon di `public/assets/pwa/`.
+- Setelah mengubah berkas yang di-cache service worker, naikkan `VERSION` di `PwaController`.

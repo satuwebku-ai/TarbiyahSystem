@@ -165,7 +165,7 @@ class SecurityAuditTest extends TestCase
         $unprotected = [];
         foreach (Route::getRoutes() as $route) {
             $name = (string) $route->getName();
-            if (! preg_match('/^(pegawai|pelajar)\./', $name) || preg_match('/\.(login|login\.store|register|register\.store|password\..+|two-factor\.challenge(\.store)?)$/', $name)) {
+            if (! preg_match('/^(pegawai|pelajar)\./', $name) || preg_match('/\.(login|login\.store|register|register\.store|password\..+|two-factor\.challenge(\.store)?|pwa\.(manifest|sw|offline))$/', $name)) {
                 continue;
             }
             $hasAuth = (bool) array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && ($m === 'auth' || str_starts_with($m, 'auth:')));

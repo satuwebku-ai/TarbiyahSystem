@@ -6,11 +6,17 @@ use App\Http\Controllers\Pegawai\HistoryController;
 use App\Http\Controllers\Pegawai\NotificationController;
 use App\Http\Controllers\Pegawai\PasswordResetController;
 use App\Http\Controllers\Pegawai\ProfileController;
+use App\Http\Controllers\Pegawai\PwaController;
 use App\Http\Controllers\Pegawai\TwoFactorController;
 use Illuminate\Support\Facades\Route;
 
 // pegawai.namadomain.com — nama route berawalan "pegawai."
 // Portal khusus Pegawai/Guru: akun = tabel admins yang dihubungkan ke data pegawai (Fase 4), guard "pegawai".
+// PWA (aplikasi yang bisa dipasang di HP): publik, tanpa data pengguna.
+Route::get('manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
+Route::get('sw.js', [PwaController::class, 'serviceWorker'])->name('pwa.sw');
+Route::get('offline', [PwaController::class, 'offline'])->name('pwa.offline');
+
 Route::redirect('check-in', '/');
 Route::redirect('check-out', '/');
 Route::middleware('guest')->group(function () {
