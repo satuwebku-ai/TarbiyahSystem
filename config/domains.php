@@ -10,11 +10,7 @@ return [
     'pegawai' => env('PEGAWAI_SUBDOMAIN', 'pegawai') . '.' . $root,   // portal Pegawai/Guru
 
     // Izinkan pelajar mendaftar sendiri di pelajar.<domain>/register
-    'pelajar_registration' => (bool) env('PELAJAR_REGISTRATION', true),
-
-    // Tombol "Akun Demo" (login satu klik) di halaman login. Bawaan: hanya aktif di APP_ENV=local.
-    // Atur DEMO_LOGIN=true/false di .env. Selalu nonaktif di produksi kecuali DEMO_LOGIN=true diisi eksplisit.
-    'demo_login' => filter_var(env('DEMO_LOGIN', env('APP_ENV') === 'local'), FILTER_VALIDATE_BOOLEAN),
+    'pelajar_registration' => (bool) env('PELAJAR_REGISTRATION', false),
 
     // Data contoh fiktif (unit, jabatan, sekolah, pegawai, penugasan, siswa) lewat db:seed.
     // Bawaan: hanya di luar production. Isi SEED_SAMPLE_DATA=true untuk server uji coba berstatus production.

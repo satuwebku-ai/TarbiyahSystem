@@ -8,5 +8,4 @@
     'action' => route('pegawai.login.store'),
     'forgot' => route('pegawai.password.request'),
   ])
-  @include('partials.demo-accounts', ['guard' => 'pegawai'])
 @endsection

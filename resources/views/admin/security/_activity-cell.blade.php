@@ -21,6 +21,19 @@
             'role.updated' => 'Role diperbarui',
             'role.deleted' => 'Role dihapus',
             'security.settings_updated' => 'Kebijakan keamanan diperbarui',
+            'security.two_factor_policy_updated' => 'Kebijakan 2FA diperbarui',
+            'security.two_factor_reset' => '2FA akun direset oleh admin',
+            'admin.two_factor_enabled' => '2FA diaktifkan',
+            'admin.two_factor_disabled' => '2FA dimatikan',
+            'admin.two_factor_recovery_regenerated' => 'Kode pemulihan 2FA dibuat ulang',
+            'admin.two_factor_failed' => 'Kode 2FA salah',
+            'admin.two_factor_throttled' => 'Kode 2FA diblokir sementara',
+            'pegawai.two_factor_enabled' => '2FA portal pegawai diaktifkan',
+            'pegawai.two_factor_disabled' => '2FA portal pegawai dimatikan',
+            'pegawai.two_factor_recovery_regenerated' => 'Kode pemulihan 2FA pegawai dibuat ulang',
+            'pegawai.two_factor_failed' => 'Kode 2FA portal pegawai salah',
+            'pegawai.two_factor_throttled' => 'Kode 2FA portal pegawai diblokir sementara',
+            'settings.updated' => 'Pengaturan aplikasi diperbarui',
             'employee.created' => 'Pegawai didaftarkan',
             'employee.updated' => 'Data pegawai diperbarui',
             'employee.status_changed' => 'Status pegawai diubah',
@@ -47,6 +60,9 @@
     <div class="fw-semibold">{{ $labels[$entry->event] ?? $entry->event }}</div>
     @if(!empty($entry->details['changed_fields']))
       <div class="small text-secondary">Bidang: {{ implode(', ', $entry->details['changed_fields']) }}</div>
+    @endif
+    @if(!empty($entry->details['two_factor']))
+      <div class="small text-secondary">Verifikasi 2FA: {{ $entry->details['two_factor'] === 'recovery_code' ? 'kode pemulihan' : 'aplikasi autentikator' }}.</div>
     @endif
     @if(!empty($entry->details['password_changed']))
       <div class="small text-secondary">Password akun admin ikut diperbarui.</div>

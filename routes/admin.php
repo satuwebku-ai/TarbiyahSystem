@@ -35,9 +35,10 @@ use App\Http\Controllers\Admin\SecuritySettingsController;
 use App\Http\Controllers\Admin\StudentAttendanceController;
 use App\Http\Controllers\Admin\StudentAttendanceSettingController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\TwoFactorController;
+use App\Http\Controllers\Admin\TwoFactorSettingsController;
 use App\Http\Controllers\Admin\WorkActivityController;
 use App\Http\Controllers\Admin\WorkProgramController;
-use App\Http\Controllers\Auth\DemoLoginController;
 use Illuminate\Support\Facades\Route;
 
 // pengelola.namadomain.com — nama route berawalan "admin."
@@ -45,7 +46,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('login', [AuthController::class, 'login'])->name('login.store');
-    Route::post('demo-login', [DemoLoginController::class, 'store'])->middleware('throttle:20,1')->defaults('guard', 'admin')->name('demo.login');
+    Route::get('two-factor', [AuthController::class, 'showTwoFactor'])->name('two-factor.challenge');
+    Route::post('two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1')->name('two-factor.challenge.store');
     Route::get('setup', [FirstAdminSetupController::class, 'show'])->name('setup');
     Route::post('setup', [FirstAdminSetupController::class, 'store'])->middleware('throttle:5,1')->name('setup.store');
 
@@ -55,7 +57,7 @@ Route::middleware('guest')->group(function () {
     Route::post('reset-password', [PasswordResetController::class, 'reset'])->name('password.store');
 });
 
-Route::middleware(['auth', 'admin.session'])->group(function () {
+Route::middleware(['auth', 'admin.session', 'two-factor.enrolled'])->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/', DashboardController::class)->middleware('can:dashboard.view')->name('dashboard');
@@ -70,6 +72,20 @@ Route::middleware(['auth', 'admin.session'])->group(function () {
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('profile/password', [ProfileController::class, 'password'])->name('profile.password');
+
+    // 2FA milik sendiri (cukup login; hanya menyentuh akun pemilik).
+    Route::post('profile/two-factor', [TwoFactorController::class, 'enable'])->name('profile.two-factor.enable');
+    Route::post('profile/two-factor/confirm', [TwoFactorController::class, 'confirm'])->middleware('throttle:10,1')->name('profile.two-factor.confirm');
+    Route::post('profile/two-factor/recovery-codes', [TwoFactorController::class, 'recoveryCodes'])->middleware('throttle:10,1')->name('profile.two-factor.recovery-codes');
+    Route::delete('profile/two-factor', [TwoFactorController::class, 'disable'])->middleware('throttle:10,1')->name('profile.two-factor.disable');
+
+    Route::get('security/two-factor', [TwoFactorSettingsController::class, 'index'])
+        ->middleware('can:security.view')->name('security.two-factor');
+    Route::put('security/two-factor', [TwoFactorSettingsController::class, 'update'])
+        ->middleware('can:security.update')->name('security.two-factor.update');
+    Route::delete('security/two-factor/{type}/{id}', [TwoFactorSettingsController::class, 'reset'])
+        ->whereIn('type', ['admin', 'pegawai'])->whereNumber('id')
+        ->middleware('can:security.update')->name('security.two-factor.reset');
 
     Route::get('security', [SecuritySettingsController::class, 'index'])
         ->middleware('can:security.view')->name('security.index');

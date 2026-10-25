@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
 use App\Models\AdminSecuritySetting;
+use App\Services\Captcha;
+use App\Services\TwoFactorAuthenticator;
+use App\Services\TwoFactorPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +26,9 @@ abstract class BaseAuthController extends Controller
     abstract protected function loginView(): string;
     abstract protected function homeRoute(): string;
     abstract protected function loginRoute(): string;
+
+    /** Menit tantangan 2FA berlaku sejak kata sandi benar; lewat dari itu harus login ulang. */
+    private const TWO_FACTOR_TTL_MINUTES = 5;
 
     /** Nama input form untuk identitas login. Default: email. */
     protected function loginField(): string { return 'email'; }
@@ -59,6 +65,8 @@ abstract class BaseAuthController extends Controller
             $field     => $this->loginRules(),
             'password' => ['required', 'string'],
         ]);
+        // CAPTCHA diperiksa sebelum hitungan percobaan: bot tanpa CAPTCHA tidak bisa mengunci akun orang lain.
+        app(Captcha::class)->verify($request, 'login');
         $credentials = [...$this->credentialColumn(trim($input[$field])), 'password' => $input['password']];
 
         $throttleKey = Str::lower(trim($input[$field])) . '|' . $request->ip() . '|' . $this->guardName();
@@ -91,6 +99,22 @@ abstract class BaseAuthController extends Controller
 
         $guard = Auth::guard($this->guardName());
 
+        // Akun dengan 2FA aktif: kata sandi diperiksa tanpa login dulu; sesi baru dibuat setelah kode 2FA benar.
+        // (Jangan memakai attempt() di sini: ia langsung login dan bisa mengirim cookie "ingat saya".)
+        if ($candidate = $this->twoFactorCandidate($guard, [...$credentials, 'is_active' => true])) {
+            if ($message = $this->denyLogin($candidate)) {
+                RateLimiter::hit($throttleKey, $decaySeconds);
+                RateLimiter::hit($ipKey, $ipDecay);
+                $this->auditLogin('login_failed', $input[$field], ['reason' => 'denied']);
+
+                throw ValidationException::withMessages([$field => $message]);
+            }
+
+            RateLimiter::clear($throttleKey);
+
+            return $this->startTwoFactorChallenge($request, $candidate);
+        }
+
         // is_active = true -> akun nonaktif tidak bisa masuk.
         if (! $guard->attempt([...$credentials, 'is_active' => true], $request->boolean('remember'))) {
             RateLimiter::hit($throttleKey, $decaySeconds);
@@ -112,17 +136,151 @@ abstract class BaseAuthController extends Controller
         }
 
         RateLimiter::clear($throttleKey);
+
+        return $this->finishLogin($request, $guard->user());
+    }
+
+    /** Langkah akhir login berhasil (juga dipakai setelah tantangan 2FA): sesi baru, catat login terakhir, audit, redirect. */
+    private function finishLogin(Request $request, $user, array $auditDetails = []): RedirectResponse
+    {
         $request->session()->regenerate();
 
-        $guard->user()->forceFill([
+        $user->forceFill([
             'last_login_at' => now(),
             'last_login_ip' => $request->ip(),
         ])->save();
         if ($this->usesStaffPolicy()) {
-            AdminAuditLog::record($this->guardName().'.login_success', $guard->user(), $guard->user());
+            AdminAuditLog::record($this->guardName().'.login_success', $user, $user, $auditDetails);
         }
 
         return redirect()->intended(route($this->homeRoute()));
+    }
+
+    // ---- 2FA (TOTP) saat login ---------------------------------------------------------------
+
+    private function pendingKey(): string
+    {
+        return 'two_factor.pending.'.$this->guardName();
+    }
+
+    /** Akun yang kata sandinya benar dan wajib melewati tantangan 2FA; null bila tidak berlaku. */
+    private function twoFactorCandidate($guard, array $lookup)
+    {
+        if (! $this->usesStaffPolicy() || ! TwoFactorPolicy::featureEnabled()) {
+            return null;
+        }
+
+        $provider = $guard->getProvider();
+        $user = $provider->retrieveByCredentials($lookup);
+
+        return $user && TwoFactorPolicy::challengeRequiredFor($user) && $provider->validateCredentials($user, $lookup)
+            ? $user
+            : null;
+    }
+
+    private function startTwoFactorChallenge(Request $request, $user): RedirectResponse
+    {
+        $request->session()->put($this->pendingKey(), [
+            'id' => $user->getAuthIdentifier(),
+            'remember' => $request->boolean('remember'),
+            'expires' => now()->addMinutes(self::TWO_FACTOR_TTL_MINUTES)->timestamp,
+        ]);
+        $request->session()->regenerate();
+
+        return redirect()->route($this->twoFactorRoute());
+    }
+
+    /** Akun yang sedang menunggu kode 2FA, atau null (tidak ada / kedaluwarsa / akun berubah). */
+    private function pendingTwoFactorUser(Request $request)
+    {
+        $pending = $request->session()->get($this->pendingKey());
+        if (! is_array($pending) || ($pending['expires'] ?? 0) < now()->timestamp) {
+            $request->session()->forget($this->pendingKey());
+
+            return null;
+        }
+
+        $user = Auth::guard($this->guardName())->getProvider()->retrieveById($pending['id']);
+        if (! $user || ! $user->is_active || ! TwoFactorPolicy::challengeRequiredFor($user) || $this->denyLogin($user)) {
+            $request->session()->forget($this->pendingKey());
+
+            return null;
+        }
+
+        return $user;
+    }
+
+    public function showTwoFactor(Request $request): View|RedirectResponse
+    {
+        abort_unless($this->usesStaffPolicy(), 404);
+
+        if (! $this->pendingTwoFactorUser($request)) {
+            return redirect()->route($this->loginRoute())->with('error', 'Sesi verifikasi berakhir. Silakan masuk kembali.');
+        }
+
+        return view('auth.two-factor-challenge', [
+            'action' => route($this->twoFactorRoute().'.store'),
+            'loginUrl' => route($this->loginRoute()),
+            'subtitle' => $this->guardName() === 'admin' ? 'Panel Pengelola' : 'Portal Pegawai',
+        ]);
+    }
+
+    public function twoFactor(Request $request, TwoFactorAuthenticator $totp): RedirectResponse
+    {
+        abort_unless($this->usesStaffPolicy(), 404);
+
+        $user = $this->pendingTwoFactorUser($request);
+        if (! $user) {
+            return redirect()->route($this->loginRoute())->with('error', 'Sesi verifikasi berakhir. Silakan masuk kembali.');
+        }
+
+        $data = $request->validate(['code' => ['required', 'string', 'max:64']]);
+        $code = trim($data['code']);
+
+        // Batas percobaan kode per akun (nilai yang sama dengan batas login), agar 6 digit tidak bisa ditebak.
+        $settings = AdminSecuritySetting::current();
+        $key = '2fa|'.$this->guardName().'|'.$user->getAuthIdentifier();
+        if (RateLimiter::tooManyAttempts($key, $settings->max_login_attempts)) {
+            $seconds = RateLimiter::availableIn($key);
+            $request->session()->forget($this->pendingKey());
+            $this->auditLogin('two_factor_throttled', $user->username ?? '', ['scope' => 'account'], $key, $seconds);
+
+            return redirect()->route($this->loginRoute())->with('error', "Terlalu banyak kode salah. Coba lagi dalam {$seconds} detik.");
+        }
+
+        $method = null;
+        if (preg_match('/^\d{3}\s?\d{3}$/', $code)) {
+            $step = $totp->verify((string) $user->two_factor_secret, $code, $user->two_factor_last_step);
+            if ($step !== null) {
+                $user->forceFill(['two_factor_last_step' => $step])->save();
+                $method = 'totp';
+            }
+        } elseif ($user->consumeRecoveryCode($code)) {
+            $method = 'recovery_code';
+        }
+
+        if ($method === null) {
+            RateLimiter::hit($key, max(60, $settings->lockout_minutes * 60));
+            AdminAuditLog::record($this->guardName().'.two_factor_failed', null, $user, ['identifier' => mb_substr((string) ($user->username ?? ''), 0, 50)]);
+
+            throw ValidationException::withMessages(['code' => 'Kode tidak valid atau sudah dipakai. Periksa jam di ponsel Anda, atau gunakan kode pemulihan.']);
+        }
+
+        RateLimiter::clear($key);
+        $pending = $request->session()->pull($this->pendingKey());
+        Auth::guard($this->guardName())->login($user, (bool) ($pending['remember'] ?? false));
+
+        $details = ['two_factor' => $method];
+        if ($method === 'recovery_code') {
+            $details['recovery_codes_left'] = $user->recoveryCodesRemaining();
+        }
+
+        return $this->finishLogin($request, $user, $details);
+    }
+
+    protected function twoFactorRoute(): string
+    {
+        return $this->guardName().'.two-factor.challenge';
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
 use App\Rules\AdminPasswordPolicy;
+use App\Services\Captcha;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ abstract class BasePasswordResetController extends Controller
     public function sendLink(Request $request): RedirectResponse
     {
         $request->validate(['email' => ['required', 'email']]);
+        app(Captcha::class)->verify($request, 'forgot');
 
         $status = Password::broker($this->broker())->sendResetLink($request->only('email'));
 

@@ -15,6 +15,9 @@ class AdminSecuritySetting extends Model
         'password_require_mixed_case',
         'password_require_numbers',
         'password_require_symbols',
+        'two_factor_enabled',
+        'two_factor_required_admin',
+        'two_factor_required_pegawai',
     ];
 
     protected function casts(): array
@@ -27,6 +30,9 @@ class AdminSecuritySetting extends Model
             'password_require_mixed_case' => 'boolean',
             'password_require_numbers' => 'boolean',
             'password_require_symbols' => 'boolean',
+            'two_factor_enabled' => 'boolean',
+            'two_factor_required_admin' => 'boolean',
+            'two_factor_required_pegawai' => 'boolean',
         ];
     }
 

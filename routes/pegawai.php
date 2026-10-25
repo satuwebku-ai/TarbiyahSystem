@@ -6,7 +6,7 @@ use App\Http\Controllers\Pegawai\HistoryController;
 use App\Http\Controllers\Pegawai\NotificationController;
 use App\Http\Controllers\Pegawai\PasswordResetController;
 use App\Http\Controllers\Pegawai\ProfileController;
-use App\Http\Controllers\Auth\DemoLoginController;
+use App\Http\Controllers\Pegawai\TwoFactorController;
 use Illuminate\Support\Facades\Route;
 
 // pegawai.namadomain.com — nama route berawalan "pegawai."
@@ -16,7 +16,8 @@ Route::redirect('check-out', '/');
 Route::middleware('guest')->group(function () {
     Route::get('login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('login', [AuthController::class, 'login'])->name('login.store');
-    Route::post('demo-login', [DemoLoginController::class, 'store'])->middleware('throttle:20,1')->defaults('guard', 'pegawai')->name('demo.login');
+    Route::get('two-factor', [AuthController::class, 'showTwoFactor'])->name('two-factor.challenge');
+    Route::post('two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1')->name('two-factor.challenge.store');
 
     Route::get('forgot-password', [PasswordResetController::class, 'showForgot'])->name('password.request');
     Route::post('forgot-password', [PasswordResetController::class, 'sendLink'])->middleware('throttle:6,1')->name('password.email');
@@ -24,7 +25,7 @@ Route::middleware('guest')->group(function () {
     Route::post('reset-password', [PasswordResetController::class, 'reset'])->name('password.store');
 });
 
-Route::middleware(['auth', 'pegawai.session'])->group(function () {
+Route::middleware(['auth', 'pegawai.session', 'two-factor.enrolled'])->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/', [AttendanceController::class, 'show'])->name('dashboard');
@@ -43,4 +44,9 @@ Route::middleware(['auth', 'pegawai.session'])->group(function () {
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('profile/password', [ProfileController::class, 'password'])->name('profile.password');
+
+    Route::post('profile/two-factor', [TwoFactorController::class, 'enable'])->name('profile.two-factor.enable');
+    Route::post('profile/two-factor/confirm', [TwoFactorController::class, 'confirm'])->middleware('throttle:10,1')->name('profile.two-factor.confirm');
+    Route::post('profile/two-factor/recovery-codes', [TwoFactorController::class, 'recoveryCodes'])->middleware('throttle:10,1')->name('profile.two-factor.recovery-codes');
+    Route::delete('profile/two-factor', [TwoFactorController::class, 'disable'])->middleware('throttle:10,1')->name('profile.two-factor.disable');
 });

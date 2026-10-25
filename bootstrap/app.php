@@ -3,6 +3,7 @@
 use App\Http\Middleware\UseGuard;
 use App\Http\Middleware\EnforceAdminSessionTimeout;
 use App\Http\Middleware\EnforcePegawaiSession;
+use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -61,11 +62,15 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Ganti/reset password (juga oleh admin lain) otomatis mengakhiri sesi lain akun itu:
         // sesi menyimpan hash password dan dicek di tiap request. Memakai guard default dari UseGuard.
-        $middleware->web(append: [\Illuminate\Session\Middleware\AuthenticateSession::class]);
+        $middleware->web(append: [
+            \Illuminate\Session\Middleware\AuthenticateSession::class,
+            \App\Http\Middleware\SecurityHeaders::class,
+        ]);
 
         $middleware->alias([
             'admin.session' => EnforceAdminSessionTimeout::class,
             'pegawai.session' => EnforcePegawaiSession::class,
+            'two-factor.enrolled' => EnsureTwoFactorEnrolled::class,
         ]);
 
         // Belum login -> halaman login sesuai subdomain.

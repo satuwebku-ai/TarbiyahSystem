@@ -136,9 +136,11 @@ class SecurityAuditTest extends TestCase
     {
         // Halaman yang sengaja hanya perlu login (milik sendiri). Selain ini wajib memakai middleware "can:".
         $loginOnly = ['admin.logout', 'admin.profile.edit', 'admin.profile.update', 'admin.profile.password',
-            'admin.notifications.index', 'admin.notifications.read-all', 'admin.notifications.open'];
+            'admin.notifications.index', 'admin.notifications.read-all', 'admin.notifications.open',
+            'admin.profile.two-factor.enable', 'admin.profile.two-factor.confirm', 'admin.profile.two-factor.recovery-codes', 'admin.profile.two-factor.disable'];
         $public = ['admin.login', 'admin.login.store', 'admin.setup', 'admin.setup.store', 'admin.password.request',
-            'admin.password.email', 'admin.password.reset', 'admin.password.store'];
+            'admin.password.email', 'admin.password.reset', 'admin.password.store',
+            'admin.two-factor.challenge', 'admin.two-factor.challenge.store'];
 
         $unprotected = [];
         foreach (Route::getRoutes() as $route) {
@@ -163,7 +165,7 @@ class SecurityAuditTest extends TestCase
         $unprotected = [];
         foreach (Route::getRoutes() as $route) {
             $name = (string) $route->getName();
-            if (! preg_match('/^(pegawai|pelajar)\./', $name) || preg_match('/\.(login|login\.store|register|register\.store|password\..+)$/', $name)) {
+            if (! preg_match('/^(pegawai|pelajar)\./', $name) || preg_match('/\.(login|login\.store|register|register\.store|password\..+|two-factor\.challenge(\.store)?)$/', $name)) {
                 continue;
             }
             $hasAuth = (bool) array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && ($m === 'auth' || str_starts_with($m, 'auth:')));

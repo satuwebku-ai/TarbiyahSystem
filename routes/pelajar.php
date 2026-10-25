@@ -6,7 +6,6 @@ use App\Http\Controllers\Pelajar\DashboardController;
 use App\Http\Controllers\Pelajar\PasswordResetController;
 use App\Http\Controllers\Pelajar\ProfileController;
 use App\Http\Controllers\Pelajar\RegisterController;
-use App\Http\Controllers\Auth\DemoLoginController;
 use App\Http\Middleware\EnsurePelajarRegistrationEnabled;
 use Illuminate\Support\Facades\Route;
 
@@ -15,7 +14,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('login', [AuthController::class, 'login'])->name('login.store');
-    Route::post('demo-login', [DemoLoginController::class, 'store'])->middleware('throttle:20,1')->defaults('guard', 'pelajar')->name('demo.login');
 
     // Selalu terdaftar; dibuka/ditutup lewat Pengaturan Aplikasi (config domains.pelajar_registration) dan dicek per request.
     Route::middleware(EnsurePelajarRegistrationEnabled::class)->group(function () {

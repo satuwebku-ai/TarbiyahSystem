@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\Student;
 use App\Models\StudentAccount;
+use App\Services\Captcha;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,7 @@ class RegisterController extends Controller
             'email'      => ['nullable', 'email', 'max:150', 'unique:student_accounts,email'],
             'password'   => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
         ], ['nis.unique' => $mismatch]);
+        app(Captcha::class)->verify($request, 'register');
 
         // Tebakan tanggal lahir untuk satu NIS dibatasi, selain batas per IP di rute.
         $limitKey = 'pelajar-register:'.sha1(strtolower($data['nis']));

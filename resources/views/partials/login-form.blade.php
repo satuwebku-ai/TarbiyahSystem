@@ -20,6 +20,7 @@
     <input class="form-check-input" type="checkbox" name="remember" id="remember">
     <label class="form-check-label" for="remember">Ingat saya</label>
   </div>
+  @include('partials.captcha', ['page' => 'login'])
   <button class="btn btn-primary w-100" type="submit">Masuk</button>
   @isset($register)
     <div class="text-center mt-3 small">Belum punya akun? <a href="{{ $register }}" class="text-decoration-none">Daftar</a></div>

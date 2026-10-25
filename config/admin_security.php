@@ -9,6 +9,10 @@ return [
         'password_require_mixed_case' => true,
         'password_require_numbers' => true,
         'password_require_symbols' => false,
+        // 2FA (TOTP): fitur aktif = akun staf boleh/bisa mengaktifkannya; wajib = akun tanpa 2FA dipaksa mendaftar setelah login.
+        'two_factor_enabled' => true,
+        'two_factor_required_admin' => false,
+        'two_factor_required_pegawai' => false,
     ],
 
     // Batas percobaan login GAGAL per alamat IP (semua username digabung), per guard.

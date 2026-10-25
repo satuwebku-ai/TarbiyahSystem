@@ -13,4 +13,5 @@
     </div>
   </div>
   @include('partials.profile-forms', ['profileAction' => route('admin.profile.update'), 'passwordAction' => route('admin.profile.password')])
+  @include('partials.two-factor-card', ['user' => auth()->user(), 'prefix' => 'admin'])
 @endsection

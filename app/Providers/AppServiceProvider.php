@@ -87,6 +87,16 @@ class AppServiceProvider extends ServiceProvider
             ]);
         });
 
+        // Mode path di production: kunci URL ke APP_URL supaya link (mis. reset password) tidak bisa dibelokkan
+        // lewat header Host palsu. Mode subdomain sudah terkunci oleh domain pada definisi rute.
+        if ($this->app->isProduction() && config('domains.routing_mode') === 'path') {
+            $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+            if ($host && ! in_array($host, ['localhost', '127.0.0.1'], true)) {
+                \Illuminate\Support\Facades\URL::forceRootUrl((string) config('app.url'));
+                str_starts_with((string) config('app.url'), 'https://') && \Illuminate\Support\Facades\URL::forceScheme('https');
+            }
+        }
+
         // Link reset password mengarah ke subdomain yang benar.
         ResetPassword::createUrlUsing(function ($user, string $token) {
             $route = match (true) {

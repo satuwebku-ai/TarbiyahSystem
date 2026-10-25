@@ -113,6 +113,47 @@ return [
             ],
         ],
 
+        'captcha' => [
+            'label' => 'CAPTCHA',
+            'description' => 'Verifikasi anti-bot pada halaman login, lupa kata sandi, dan pendaftaran pelajar.',
+            'fields' => [
+                'captcha_provider' => [
+                    'label' => 'Jenis CAPTCHA', 'type' => 'select', 'config' => ['captcha.provider'],
+                    'options' => [
+                        'off' => 'Nonaktif',
+                        'math' => 'Pertanyaan hitung (bawaan, tanpa akun eksternal)',
+                        'turnstile' => 'Cloudflare Turnstile',
+                        'recaptcha' => 'Google reCAPTCHA v2',
+                        'hcaptcha' => 'hCaptcha',
+                    ],
+                    'rules' => ['required', 'in:off,math,turnstile,recaptcha,hcaptcha'],
+                    'help' => 'Pertanyaan hitung hanya menahan bot paling sederhana. Untuk perlindungan nyata pakai Turnstile, reCAPTCHA, atau hCaptcha (butuh internet di server dan di perangkat pengguna).',
+                ],
+                'captcha_site_key' => [
+                    'label' => 'Site key (kunci publik)', 'type' => 'text', 'config' => ['captcha.site_key'], 'nullable' => true,
+                    'rules' => ['nullable', 'required_if:captcha_provider,turnstile,recaptcha,hcaptcha', 'string', 'max:255'],
+                    'help' => 'Dari dashboard penyedia. Hanya untuk Turnstile / reCAPTCHA / hCaptcha.',
+                ],
+                'captcha_secret_key' => [
+                    'label' => 'Secret key (kunci rahasia)', 'type' => 'secret', 'config' => ['captcha.secret_key'],
+                    'rules' => ['nullable', 'string', 'max:255'],
+                    'help' => 'Disimpan terenkripsi. Kosongkan bila tidak ingin mengubah. Bila kunci salah, login ditolak terus: simpan lalu uji login di jendela lain sebelum keluar. Darurat: php artisan security:recover --captcha.',
+                ],
+                'captcha_login' => [
+                    'label' => 'Terapkan di halaman login', 'type' => 'bool', 'config' => ['captcha.pages.login'],
+                    'rules' => ['boolean'],
+                ],
+                'captcha_forgot' => [
+                    'label' => 'Terapkan di halaman lupa kata sandi', 'type' => 'bool', 'config' => ['captcha.pages.forgot'],
+                    'rules' => ['boolean'],
+                ],
+                'captcha_register' => [
+                    'label' => 'Terapkan di pendaftaran pelajar', 'type' => 'bool', 'config' => ['captcha.pages.register'],
+                    'rules' => ['boolean'],
+                ],
+            ],
+        ],
+
         'keamanan' => [
             'label' => 'Keamanan',
             'description' => 'Pembatasan percobaan login gagal per alamat IP (semua username digabung) di portal pengelola, pegawai, dan pelajar.',

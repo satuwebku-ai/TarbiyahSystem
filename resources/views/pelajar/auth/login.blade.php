@@ -9,5 +9,4 @@
     'forgot'   => route('pelajar.password.request'),
     'register' => config('domains.pelajar_registration') ? route('pelajar.register') : null,
   ])
-  @include('partials.demo-accounts', ['guard' => 'pelajar'])
 @endsection

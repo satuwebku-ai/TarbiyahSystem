@@ -34,6 +34,7 @@
     <label class="form-label" for="password_confirmation">Ulangi kata sandi</label>
     <input type="password" id="password_confirmation" name="password_confirmation" required autocomplete="new-password" class="form-control">
   </div>
+  @include('partials.captcha', ['page' => 'register'])
   <button class="btn btn-primary w-100" type="submit">Daftar</button>
   <div class="text-center mt-3 small">Sudah punya akun? <a href="{{ route('pelajar.login') }}" class="text-decoration-none">Masuk</a></div>
 </form>

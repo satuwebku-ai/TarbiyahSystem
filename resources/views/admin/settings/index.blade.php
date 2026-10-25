@@ -58,6 +58,21 @@
         @endforeach
       </div>
 
+      @if ($activeTab === 'captcha')
+        @php($captchaSvc = app(\App\Services\Captcha::class))
+        @if ($captchaSvc->isMisconfigured())
+          <div class="alert alert-warning small mt-4 mb-0">Jenis CAPTCHA eksternal dipilih, tetapi site key atau secret key belum lengkap, jadi CAPTCHA <strong>belum diterapkan</strong>.</div>
+        @elseif ($captchaSvc->provider() === 'off')
+          <div class="alert alert-secondary small mt-4 mb-0">CAPTCHA nonaktif.</div>
+        @else
+          <div class="alert alert-success small mt-4 mb-0">CAPTCHA aktif ({{ $captchaSvc->provider() === 'math' ? 'pertanyaan hitung' : config('captcha.providers.'.$captchaSvc->provider().'.label') }}).</div>
+        @endif
+        <div class="alert alert-secondary small mt-3 mb-0">
+          Mendaftarkan situs di Cloudflare Turnstile / Google reCAPTCHA / hCaptcha akan menghasilkan site key dan secret key; daftarkan domain panel, portal pegawai, dan portal pelajar.
+          Header keamanan (CSP) otomatis mengizinkan host penyedia yang dipilih. Halaman 2FA tidak memakai CAPTCHA.
+        </div>
+      @endif
+
       @if ($activeTab === 'email')
         <div class="alert alert-secondary small mt-4 mb-0">
           Email dikirim lewat antrean: pastikan <code>php artisan queue:work</code> selalu berjalan. Bila <code>APP_KEY</code> diganti,

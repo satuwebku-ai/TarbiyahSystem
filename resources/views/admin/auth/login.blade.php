@@ -8,5 +8,4 @@
       <a href="{{ route('admin.setup') }}" class="text-decoration-none">Buat akun Super Admin pertama</a>
     </div>
   @endif
-  @include('partials.demo-accounts', ['guard' => 'admin'])
 @endsection

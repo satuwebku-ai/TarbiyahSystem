@@ -7,6 +7,7 @@
            class="form-control @error('email') is-invalid @enderror">
     @error('email') <div class="invalid-feedback">{{ $message }}</div> @enderror
   </div>
+  @include('partials.captcha', ['page' => 'forgot'])
   <button class="btn btn-primary w-100" type="submit">Kirim tautan reset</button>
   <div class="text-center mt-3 small"><a href="{{ $login }}" class="text-decoration-none">Kembali ke login</a></div>
 </form>
