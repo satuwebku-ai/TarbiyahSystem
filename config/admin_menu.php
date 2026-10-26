@@ -69,6 +69,7 @@ return [
             ['label' => 'Absensi Pegawai', 'icon' => 'calendar', 'children' => [
                 ['label' => 'Rekap Harian', 'route' => 'admin.attendance.daily', 'active' => 'admin.attendance.daily', 'can' => 'attendance.view'],
                 ['label' => 'Rekap Bulanan', 'route' => 'admin.attendance.monthly', 'active' => 'admin.attendance.monthly', 'can' => 'attendance.view'],
+                ['label' => 'Periksa Foto', 'route' => 'admin.attendance.photos.index', 'active' => 'admin.attendance.photos.*', 'can' => 'attendance.view'],
                 ['label' => 'Koreksi', 'route' => 'admin.attendance.corrections.index', 'active' => 'admin.attendance.corrections.*', 'can' => 'attendance.corrections.review'],
                 ['label' => 'Izin / Sakit / Cuti', 'route' => 'admin.attendance.entries.index', 'active' => 'admin.attendance.entries.*', 'can' => 'attendance.records.manage'],
                 ['label' => 'Kebijakan', 'route' => 'admin.attendance.policies.index', 'active' => 'admin.attendance.policies.*', 'can' => 'attendance.policies.manage'],
@@ -87,6 +88,7 @@ return [
         'items' => [
             ['label' => 'Akses & Pengguna', 'icon' => 'shield', 'children' => [
                 ['label' => 'Akun Pengelola',   'route' => 'admin.admins.index', 'active' => 'admin.admins.*', 'can' => 'admins.view'],
+                ['label' => 'Akun per Unit', 'route' => 'admin.unit-admins.index', 'active' => 'admin.unit-admins.*', 'can' => 'admins.create'],
                 ['label' => 'Role & Permission', 'route' => 'admin.roles.index',  'active' => 'admin.roles.*',  'can' => 'roles.view'],
             ]],
         ],

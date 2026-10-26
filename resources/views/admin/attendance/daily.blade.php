@@ -33,7 +33,9 @@
                 @if($rec?->check_in_photo)<a href="{{ route('admin.attendance.photo', [$rec, 'in']) }}" target="_blank" rel="noopener" class="text-decoration-none">Foto masuk</a>@endif
                 @if($rec?->check_out_photo)<a href="{{ route('admin.attendance.photo', [$rec, 'out']) }}" target="_blank" rel="noopener" class="text-decoration-none ms-2">Foto pulang</a>@endif
                 @if($rec?->check_in_lat !== null)<div><a href="https://www.google.com/maps?q={{ $rec->check_in_lat }},{{ $rec->check_in_lng }}" target="_blank" rel="noopener" class="text-decoration-none">Lokasi masuk</a>@if($rec->check_in_distance_m !== null)<span class="text-secondary"> · {{ $rec->check_in_distance_m }} m dari sekolah</span>@endif</div>@endif
-                @if($rec && ($notes = $rec->photoNotes()))<div><span class="badge text-bg-warning" title="{{ implode('; ', $notes) }}">⚠ Foto perlu dicek</span></div>@endif
+                @if($rec)@foreach($rec->faceBadges() as $b)<div><span class="badge text-bg-{{ $b['class'] }}">{{ $b['text'] }}</span></div>@endforeach @endif
+                @if($rec && ($rb = $rec->reviewBadge()))<div><span class="badge text-bg-{{ $rb['class'] }}" title="{{ $rb['title'] }}">{{ $rb['text'] }}</span></div>@endif
+                @if($rec && ! $rec->photo_review_status && ($notes = $rec->photoNotes()))<div><span class="badge text-bg-warning" title="{{ implode('; ', $notes) }}">⚠ Foto perlu dicek</span></div>@endif
                 @if(! $rec?->check_in_photo && ! $rec?->check_out_photo && $rec?->check_in_lat === null)<span class="text-secondary">—</span>@endif
               </td>
             </tr>

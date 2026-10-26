@@ -22,6 +22,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Jobs\MatchAttendanceFace;
+use App\Services\Face\FaceMatcherFactory;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceService
@@ -40,7 +43,7 @@ class AttendanceService
         $geo = $this->verifyProof($policy, $proof, 'check_in');
 
         try {
-            return DB::transaction(function () use ($employee, $now, $date, $unitId, $policy, $ip, $geo, $proof) {
+            $saved = DB::transaction(function () use ($employee, $now, $date, $unitId, $policy, $ip, $geo, $proof) {
                 $existing = AttendanceRecord::query()->where('employee_id', $employee->id)->where('attendance_date', $date)->lockForUpdate()->first();
                 if ($existing) {
                     $this->fail('attendance', $existing->check_in_at
@@ -52,7 +55,7 @@ class AttendanceService
                 [$photo, $photoMeta] = $this->storePhoto($proof['photo'] ?? null, $date, $employee, $now, 'MASUK', 'check_in');
 
                 try {
-                    return AttendanceRecord::create($geo + ['check_in_photo' => $photo] + $photoMeta + [
+                    $record = AttendanceRecord::create($geo + ['check_in_photo' => $photo] + $photoMeta + [
                     'employee_id' => $employee->id,
                     'organizational_unit_id' => $unitId,
                     'attendance_date' => $date,
@@ -64,6 +67,8 @@ class AttendanceService
                     'source' => 'web',
                     'check_in_ip' => $ip,
                     ]);
+
+                    return $record;
                 } catch (\Throwable $e) {
                     $photo && Storage::disk('local')->delete($photo);
                     throw $e;
@@ -72,13 +77,17 @@ class AttendanceService
         } catch (UniqueConstraintViolationException) {
             $this->fail('attendance', 'Anda sudah check-in hari ini.');
         }
+
+        $this->queueFaceMatch($saved, 'check_in');
+
+        return $saved;
     }
 
     public function checkOut(Employee $employee, ?string $ip, array $proof = []): AttendanceRecord
     {
         $now = AttendanceClock::now($this->resolver->timezoneForEmployee($employee));
 
-        return DB::transaction(function () use ($employee, $now, $ip, $proof) {
+        $saved = DB::transaction(function () use ($employee, $now, $ip, $proof) {
             $record = AttendanceRecord::query()->where('employee_id', $employee->id)
                 ->where('attendance_date', $now->toDateString())->lockForUpdate()->first();
 
@@ -98,7 +107,7 @@ class AttendanceService
             [$photo, $photoMeta] = $this->storePhoto($proof['photo'] ?? null, $record->attendance_date->toDateString(), $employee, $now, 'PULANG', 'check_out');
 
             try {
-                $record->update($geo + ['check_out_photo' => $photo] + $photoMeta + [
+                $record->update($geo + ['check_out_photo' => $photo] + $photoMeta + ($photo ? $this->clearedPhotoReview() : []) + [
                     'check_out_at' => AttendanceClock::toStorage($now),
                     'work_minutes' => $this->minutesBetween($record->check_in_at, $now),
                     'check_out_ip' => $ip,
@@ -110,6 +119,10 @@ class AttendanceService
 
             return $record;
         });
+
+        $this->queueFaceMatch($saved, 'check_out');
+
+        return $saved;
     }
 
     // ---- koreksi -------------------------------------------------------
@@ -362,6 +375,25 @@ class AttendanceService
             "{$prefix}_lat" => round($lat, 7), "{$prefix}_lng" => round($lng, 7),
             "{$prefix}_accuracy_m" => $acc, "{$prefix}_distance_m" => $distance,
         ];
+    }
+
+    /** Foto baru membuat keputusan admin sebelumnya tidak berlaku lagi. @return array<string, null> */
+    private function clearedPhotoReview(): array
+    {
+        return ['photo_review_status' => null, 'photo_review_note' => null, 'photo_reviewed_by_admin_id' => null, 'photo_reviewed_at' => null];
+    }
+
+    /** Antrekan pencocokan wajah (setelah absen tersimpan) bila diaktifkan. Kegagalan di sini tidak boleh menggagalkan absen. */
+    private function queueFaceMatch(AttendanceRecord $record, string $prefix): void
+    {
+        if (! $record->{"{$prefix}_photo"} || ! FaceMatcherFactory::enabled()) {
+            return;
+        }
+        try {
+            MatchAttendanceFace::dispatch($record->id, $prefix);
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mengantrekan pencocokan wajah.', ['record_id' => $record->id, 'error' => $e->getMessage()]);
+        }
     }
 
     /**

@@ -159,6 +159,37 @@ class AppSettingsTest extends TestCase
         $this->assertSame($before, AppSetting::count());
     }
 
+    public function test_face_group_validates_encrypts_secrets_and_applies_to_config(): void
+    {
+        $this->actingAs($this->settingsAdmin(), 'admin');
+        $base = [
+            'face_driver' => 'http', 'face_http_url' => 'http://127.0.0.1:8099/compare', 'face_http_token' => 'rahasia-token',
+            'face_aws_region' => 'ap-southeast-1', 'face_match_threshold' => 85, 'face_review_threshold' => 65, 'face_timeout' => 10,
+        ];
+
+        $this->put(route('admin.settings.update', 'wajah'), $base)->assertSessionHas('success');
+        $this->app->make(AppSettings::class)->apply();
+
+        $this->assertSame('http', config('face.driver'));
+        $this->assertSame(85, config('face.match_threshold'));
+        $this->assertSame('rahasia-token', config('face.http.token'));
+        $stored = AppSetting::where('key', 'face_http_token')->firstOrFail();
+        $this->assertTrue((bool) $stored->is_secret);
+        $this->assertStringNotContainsString('rahasia-token', (string) $stored->value);
+
+        // batas "perlu dicek" tidak boleh melebihi batas "cocok"
+        $this->put(route('admin.settings.update', 'wajah'), ['face_review_threshold' => 90] + $base)->assertSessionHasErrors('face_review_threshold');
+        // driver http wajib punya alamat; alamat harus URL
+        $this->put(route('admin.settings.update', 'wajah'), ['face_http_url' => ''] + $base)->assertSessionHasErrors('face_http_url');
+        $this->put(route('admin.settings.update', 'wajah'), ['face_http_url' => 'bukan-url'] + $base)->assertSessionHasErrors('face_http_url');
+        // driver aws wajib punya access key
+        $this->put(route('admin.settings.update', 'wajah'), ['face_driver' => 'aws'] + $base)->assertSessionHasErrors('face_aws_key');
+        // driver tidak dikenal ditolak
+        $this->put(route('admin.settings.update', 'wajah'), ['face_driver' => 'lain'] + $base)->assertSessionHasErrors('face_driver');
+
+        $this->get(route('admin.settings.index', ['tab' => 'wajah']))->assertOk()->assertSee('Penyedia pencocok');
+    }
+
     public function test_saving_identical_values_changes_nothing_and_writes_no_audit_entry(): void
     {
         $this->actingAs($this->settingsAdmin(), 'admin');

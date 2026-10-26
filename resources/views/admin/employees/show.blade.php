@@ -157,6 +157,47 @@
     </div>
     @endcanany
 
+    @can('employees.faces.manage')
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent fw-semibold">Foto acuan wajah (pencocokan absensi)</div>
+        <div class="card-body">
+          @php($faceDriver = config('face.driver', 'off'))
+          <div class="small text-secondary mb-3">
+            Dipakai untuk membandingkan selfie absen dengan wajah pegawai. Pencocokan
+            @if($faceDriver === 'off')<strong>sedang dimatikan</strong> (Pengaturan Aplikasi &gt; Pencocokan Wajah)@else<strong>aktif</strong> ({{ $faceDriver }})@endif.
+            Hasilnya hanya penanda untuk diperiksa admin. Unggah foto wajah yang jelas, menghadap depan, tanpa kacamata gelap atau masker.
+          </div>
+          <div class="d-flex flex-wrap gap-3 mb-3">
+            @forelse($employee->faceReferences as $face)
+              <div class="text-center">
+                <img src="{{ route('admin.employees.faces.image', [$employee, $face]) }}" alt="Foto acuan" class="rounded border" style="width:96px;height:96px;object-fit:cover">
+                <form method="POST" action="{{ route('admin.employees.faces.destroy', [$employee, $face]) }}" onsubmit="return confirm('Hapus foto acuan ini?')" class="mt-1">
+                  @csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger py-0" type="submit">Hapus</button>
+                </form>
+              </div>
+            @empty
+              <div class="text-secondary">Belum ada foto acuan.</div>
+            @endforelse
+          </div>
+          @if($employee->faceReferences->count() < (int) config('face.max_references', 3))
+            <form method="POST" action="{{ route('admin.employees.faces.store', $employee) }}" enctype="multipart/form-data" class="row g-2">
+              @csrf
+              <div class="col-12"><input type="file" name="photo" required accept=".jpg,.jpeg,.png" class="form-control form-control-sm @error('photo') is-invalid @enderror"></div>
+              <div class="col-12 form-check ms-2">
+                <input class="form-check-input @error('consent') is-invalid @enderror" type="checkbox" name="consent" value="1" id="faceConsent" required>
+                <label class="form-check-label small" for="faceConsent">Pegawai telah memberi persetujuan tertulis atas penggunaan foto wajahnya untuk pencocokan absensi.</label>
+              </div>
+              <div class="col-12 d-grid"><button class="btn btn-primary btn-sm" type="submit">Tambah foto acuan</button></div>
+              @error('photo')<div class="small text-danger">{{ $message }}</div>@enderror
+              @error('consent')<div class="small text-danger">{{ $message }}</div>@enderror
+            </form>
+          @endif
+        </div>
+      </div>
+    </div>
+    @endcan
+
     <div class="col-lg-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-header bg-transparent fw-semibold">Riwayat status</div>

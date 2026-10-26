@@ -71,6 +71,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeAssignment::class);
     }
 
+    public function faceReferences(): HasMany
+    {
+        return $this->hasMany(EmployeeFaceReference::class);
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(EmployeeDocument::class);

@@ -61,6 +61,60 @@ return [
             ],
         ],
 
+        'wajah' => [
+            'label' => 'Pencocokan Wajah',
+            'description' => 'Membandingkan selfie absen pegawai dengan foto acuan. Hasilnya hanya menandai absen untuk diperiksa admin, tidak pernah menolak absen. Foto acuan diunggah per pegawai di halaman detail pegawai. Foto wajah adalah data pribadi yang sensitif: pastikan pegawai sudah memberi persetujuan tertulis.',
+            'fields' => [
+                'face_driver' => [
+                    'label' => 'Penyedia pencocok', 'type' => 'select', 'config' => ['face.driver'],
+                    'options' => [
+                        'off' => 'Mati (tidak ada foto yang dikirim ke mana pun)',
+                        'http' => 'Layanan sendiri: VPS pencocok terpisah, atau satu VPS dengan aplikasi (HTTP)',
+                        'aws' => 'Layanan cloud: Amazon Rekognition',
+                    ],
+                    'rules' => ['required', 'in:off,http,aws'],
+                    'help' => 'Selain "Mati", foto selfie dan foto acuan dikirim ke penyedia terpilih setiap kali pegawai absen berfoto. Foto tetap disimpan di server aplikasi ini.',
+                ],
+                'face_http_url' => [
+                    'label' => 'Alamat layanan sendiri', 'type' => 'text', 'config' => ['face.http.url'], 'nullable' => true,
+                    'rules' => ['nullable', 'required_if:face_driver,http', 'url:http,https', 'max:255'],
+                    'help' => 'Contoh: https://wajah.sekolah.sch.id/compare atau, bila satu server, http://127.0.0.1:8099/compare. HTTP polos hanya diizinkan ke server ini sendiri.',
+                ],
+                'face_http_token' => [
+                    'label' => 'Token layanan sendiri', 'type' => 'secret', 'config' => ['face.http.token'],
+                    'rules' => ['nullable', 'string', 'max:255'],
+                    'help' => 'Disimpan terenkripsi. Kosongkan bila tidak ingin mengubah.',
+                ],
+                'face_aws_region' => [
+                    'label' => 'Region AWS', 'type' => 'text', 'config' => ['face.aws.region'], 'nullable' => true,
+                    'rules' => ['nullable', 'required_if:face_driver,aws', 'string', 'max:40'],
+                ],
+                'face_aws_key' => [
+                    'label' => 'AWS Access Key ID', 'type' => 'text', 'config' => ['face.aws.key'], 'nullable' => true,
+                    'rules' => ['nullable', 'required_if:face_driver,aws', 'string', 'max:255'],
+                ],
+                'face_aws_secret' => [
+                    'label' => 'AWS Secret Access Key', 'type' => 'secret', 'config' => ['face.aws.secret'],
+                    'rules' => ['nullable', 'string', 'max:255'],
+                    'help' => 'Disimpan terenkripsi. Kosongkan bila tidak ingin mengubah. Butuh paket aws/aws-sdk-php di server.',
+                ],
+                'face_match_threshold' => [
+                    'label' => 'Batas skor "cocok" (0-100)', 'type' => 'number', 'config' => ['face.match_threshold'],
+                    'rules' => ['required', 'integer', 'between:1,100'],
+                    'help' => 'Skor di atas atau sama dengan angka ini ditandai "cocok". Setel dengan data nyata di sekolah Anda.',
+                ],
+                'face_review_threshold' => [
+                    'label' => 'Batas skor "perlu dicek" (0-100)', 'type' => 'number', 'config' => ['face.review_threshold'],
+                    'rules' => ['required', 'integer', 'between:1,100', 'lte:face_match_threshold'],
+                    'help' => 'Skor di antara batas ini dan batas "cocok" ditandai "perlu dicek"; di bawahnya "tidak cocok". Harus lebih kecil atau sama dengan batas "cocok".',
+                ],
+                'face_timeout' => [
+                    'label' => 'Batas waktu satu permintaan (detik)', 'type' => 'number', 'config' => ['face.timeout'],
+                    'rules' => ['required', 'integer', 'between:3,60'],
+                ],
+            ],
+        ],
+
         'email' => [
             'label' => 'Email',
             'description' => 'Pengiriman email notifikasi. Email dikirim lewat antrean, jadi worker antrean harus hidup.',

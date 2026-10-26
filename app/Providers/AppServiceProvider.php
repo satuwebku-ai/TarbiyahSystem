@@ -12,6 +12,8 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\View;
 use App\Services\AppSettings;
+use App\Services\Face\FaceMatcher;
+use App\Services\Face\FaceMatcherFactory;
 use App\Services\OrganizationSetup;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(AppSettings::class);
+        // Tidak singleton: penyedia dipilih dari config('face.driver') pada saat dipakai agar perubahan dari menu langsung berlaku.
+        $this->app->bind(FaceMatcher::class, fn () => FaceMatcherFactory::make());
     }
 
     public function boot(): void

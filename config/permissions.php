@@ -42,10 +42,12 @@ return [
             'employees.link_account' => 'Hubungkan pegawai dengan akun pengelola',
             'employees.documents.view' => 'Lihat & unduh dokumen pegawai',
             'employees.documents.manage' => 'Unggah & hapus dokumen pegawai',
+            'employees.faces.manage' => 'Kelola foto acuan wajah pegawai (pencocokan wajah absensi)',
             'employees.types.manage' => 'Kelola jenis pegawai',
         ],
         'Absensi Pegawai' => [
             'attendance.view' => 'Lihat rekap absensi (sesuai cakupan unit)',
+            'attendance.photos.review' => 'Periksa foto absensi: putuskan sesuai/mencurigakan dan cocokkan ulang wajah',
             'attendance.records.manage' => 'Catat izin, sakit, cuti, tidak hadir',
             'attendance.corrections.review' => 'Setujui/tolak koreksi absensi',
             'attendance.policies.manage' => 'Kelola kebijakan absensi',

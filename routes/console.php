@@ -25,5 +25,8 @@ Schedule::command('db:backup')->dailyAt('01:00')->timezone($tz)->withoutOverlapp
 Schedule::command('fingerprint:prune-pending')->dailyAt('03:00')->timezone($tz)->withoutOverlapping();
 // Foto selfie absen dihapus setelah masa simpan (ATTENDANCE_PHOTO_RETENTION_DAYS, bawaan 90 hari).
 Schedule::command('attendance:prune-photos')->dailyAt('03:30')->timezone($tz)->withoutOverlapping();
+// Ulangi pencocokan wajah yang gagal (penyedia sempat mati) atau belum punya foto acuan; hanya berjalan bila pencocokan aktif.
+Schedule::command('face:rematch', ['--days' => 3, '--status' => ['error', 'no_reference']])->dailyAt('04:00')->timezone($tz)->withoutOverlapping()
+    ->when(fn () => \App\Services\Face\FaceMatcherFactory::enabled());
 Schedule::command('notifications:prune')->weeklyOn(0, '02:00')->timezone($tz)->withoutOverlapping();
 Schedule::command('queue:prune-failed', ['--hours' => 720])->weeklyOn(0, '02:30')->timezone($tz);

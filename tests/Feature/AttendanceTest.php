@@ -10,7 +10,10 @@ use App\Models\AttendanceCorrection;
 use App\Models\AttendanceHoliday;
 use App\Models\AttendancePolicy;
 use App\Models\AttendanceRecord;
+use App\Jobs\MatchAttendanceFace;
+use App\Models\AdminAuditLog;
 use App\Models\Employee;
+use App\Models\EmployeeFaceReference;
 use App\Models\OrganizationalPosition;
 use App\Models\OrganizationalUnit;
 use App\Models\OrganizationalUnitType;
@@ -24,6 +27,8 @@ use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -624,6 +629,300 @@ class AttendanceTest extends TestCase
         $this->assertNotNull($old->fresh()->check_in_photo_hash); // sidik tetap ada: foto lama tetap tak bisa dipakai ulang
         $this->assertEqualsWithDelta(-0.8917, (float) $old->fresh()->check_in_lat, 0.0001);
         $this->assertNotNull($recent->fresh()->check_in_photo);
+    }
+
+    // ---- pencocokan wajah ------------------------------------------------
+
+    private function faceOn(): void
+    {
+        Storage::fake('local');
+        config(['face.driver' => 'http', 'face.http.url' => 'http://127.0.0.1:8099/compare', 'face.http.token' => 'rahasia']);
+        $this->global->update(['require_photo' => true]);
+        Carbon::setTestNow('2026-10-21 00:10:00');
+    }
+
+    private function withReference(Employee $employee): void
+    {
+        $path = "face-references/{$employee->id}/a.jpg";
+        Storage::disk('local')->put($path, 'foto-acuan');
+        EmployeeFaceReference::create(['employee_id' => $employee->id, 'path' => $path, 'consent_confirmed_at' => now()]);
+    }
+
+    public function test_face_matching_is_off_by_default_and_sends_nothing(): void
+    {
+        Storage::fake('local');
+        Http::fake();
+        $this->global->update(['require_photo' => true]);
+        [$user, $employee] = $this->linkedEmployee($this->unitA);
+        $this->withReference($employee);
+        Carbon::setTestNow('2026-10-21 00:10:00');
+
+        $this->actingAs($user, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('a.jpg', 320, 240)])
+            ->assertSessionHasNoErrors();
+
+        $record = AttendanceRecord::firstOrFail();
+        $this->assertNull($record->check_in_face_status);
+        Http::assertNothingSent();
+    }
+
+    public function test_face_score_is_classified_by_thresholds_and_attendance_is_never_rejected(): void
+    {
+        $this->faceOn();
+        Http::fake(['127.0.0.1:8099/*' => Http::sequence()->push(['similarity' => 91.5])->push(['similarity' => 70])->push(['similarity' => 30])]);
+
+        $expected = [['match', '91.50'], ['review', '70.00'], ['mismatch', '30.00']];
+        foreach ($expected as $i => [$status, $score]) {
+            [$user, $employee] = $this->linkedEmployee($this->unitA);
+            $this->withReference($employee);
+            $this->actingAs($user, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('a.jpg', 300 + $i * 10, 240)])
+                ->assertSessionHasNoErrors();
+
+            $record = AttendanceRecord::where('employee_id', $employee->id)->firstOrFail();
+            $this->assertSame($status, $record->check_in_face_status);
+            $this->assertEqualsWithDelta((float) $score, (float) $record->check_in_face_score, 0.001);
+            $this->assertNotNull($record->check_in_at); // absen tetap tercatat
+        }
+    }
+
+    public function test_face_matching_marks_no_reference_no_face_and_provider_error_without_breaking_attendance(): void
+    {
+        $this->faceOn();
+
+        Http::fake(['127.0.0.1:8099/*' => Http::sequence()->push(['error' => 'no_face'], 422)->push('rusak', 500)]);
+
+        // tanpa foto acuan
+        [$u1] = $this->linkedEmployee($this->unitA);
+        $this->actingAs($u1, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('a.jpg', 310, 240)])->assertSessionHasNoErrors();
+        $this->assertSame('no_reference', AttendanceRecord::orderBy('id')->first()->check_in_face_status);
+        Http::assertSentCount(0);
+
+        // wajah tidak terdeteksi
+        [$u2, $e2] = $this->linkedEmployee($this->unitA);
+        $this->withReference($e2);
+        $this->actingAs($u2, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('b.jpg', 320, 240)])->assertSessionHasNoErrors();
+        $this->assertSame('no_face', AttendanceRecord::where('employee_id', $e2->id)->first()->check_in_face_status);
+
+        // penyedia mati: absen tetap berhasil, status "error"
+        [$u3, $e3] = $this->linkedEmployee($this->unitA);
+        $this->withReference($e3);
+        $this->actingAs($u3, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('c.jpg', 330, 240)])->assertSessionHasNoErrors();
+        $record = AttendanceRecord::where('employee_id', $e3->id)->firstOrFail();
+        $this->assertNotNull($record->check_in_at);
+        $this->assertSame('error', $record->check_in_face_status);
+        $this->assertNull($record->check_in_face_score);
+    }
+
+    public function test_face_match_runs_for_check_out_and_badges_show_in_admin_daily_report(): void
+    {
+        $this->faceOn();
+        Http::fake(['127.0.0.1:8099/*' => Http::sequence()->push(['similarity' => 92])->push(['similarity' => 41])]);
+        [$user, $employee] = $this->linkedEmployee($this->unitA);
+        $this->withReference($employee);
+
+        $this->actingAs($user, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('a.jpg', 300, 240)])->assertSessionHasNoErrors();
+        Carbon::setTestNow('2026-10-21 08:00:00');
+        $this->withSession(['pegawai_last_activity' => now()->timestamp])->post(route('pegawai.check-out'), ['photo' => UploadedFile::fake()->image('b.jpg', 310, 240)])
+            ->assertSessionHasNoErrors();
+
+        $record = AttendanceRecord::firstOrFail();
+        $this->assertSame('match', $record->check_in_face_status);
+        $this->assertSame('mismatch', $record->check_out_face_status);
+
+        $this->actingAs($this->makeAdmin(['attendance.view'], $this->unitA), 'admin')
+            ->get(route('admin.attendance.daily', ['date' => '2026-10-21']))->assertOk()
+            ->assertSee('Masuk: Wajah cocok 92%')->assertSee('Pulang: Wajah tidak cocok 41%');
+    }
+
+    public function test_face_reference_upload_requires_consent_is_scoped_and_limited(): void
+    {
+        Storage::fake('local');
+        $employee = $this->makeEmployee($this->unitA);
+        $other = $this->makeEmployee($this->unitB);
+        $admin = $this->makeAdmin(['employees.faces.manage'], $this->unitA);
+        $this->actingAs($admin, 'admin');
+        $img = fn () => UploadedFile::fake()->image('wajah.jpg', 400, 400);
+
+        // tanpa persetujuan ditolak
+        $this->post(route('admin.employees.faces.store', $employee), ['photo' => $img()])->assertSessionHasErrors('consent');
+        // terlalu kecil ditolak
+        $this->post(route('admin.employees.faces.store', $employee), ['photo' => UploadedFile::fake()->image('k.jpg', 100, 100), 'consent' => '1'])->assertSessionHasErrors('photo');
+        // pegawai di luar cakupan unit admin
+        $this->post(route('admin.employees.faces.store', $other), ['photo' => $img(), 'consent' => '1'])->assertForbidden();
+
+        // sukses sampai batas maksimum
+        for ($i = 0; $i < 3; $i++) {
+            $this->post(route('admin.employees.faces.store', $employee), ['photo' => $img(), 'consent' => '1'])->assertSessionHasNoErrors();
+        }
+        $this->post(route('admin.employees.faces.store', $employee), ['photo' => $img(), 'consent' => '1'])->assertSessionHasErrors('photo');
+        $this->assertSame(3, $employee->faceReferences()->count());
+        $this->assertNotNull($employee->faceReferences()->first()->consent_confirmed_at);
+
+        // gambar hanya untuk admin berizin dan dalam cakupan; hapus menghapus berkas
+        $face = $employee->faceReferences()->first();
+        $this->get(route('admin.employees.faces.image', [$employee, $face]))->assertOk();
+        $this->actingAs($this->makeAdmin(['employees.view'], $this->unitA), 'admin')
+            ->get(route('admin.employees.faces.image', [$employee, $face]))->assertForbidden();
+        $this->actingAs($admin, 'admin')->delete(route('admin.employees.faces.destroy', [$employee, $face]))->assertRedirect();
+        Storage::disk('local')->assertMissing($face->path);
+        $this->assertSame(2, $employee->faceReferences()->count());
+    }
+
+    // ---- periksa foto & pencocokan ulang ---------------------------------
+
+    /** @return array{0: Employee, 1: Employee, 2: Employee} pegawai berfoto ber-penanda & bersih di unit A, dan ber-penanda di unit B */
+    private function photoReviewFixture(): array
+    {
+        Storage::fake('local');
+        $this->global->update(['require_photo' => true]);
+        Carbon::setTestNow('2026-10-21 00:10:00');
+        $checkIn = function (Employee $e, $user, int $w) {
+            $this->actingAs($user, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('a.jpg', $w, 480)])->assertSessionHasNoErrors();
+        };
+        [$uA, $flagged] = $this->linkedEmployee($this->unitA);
+        $checkIn($flagged, $uA, 1200);   // lebar > 640 px: bertanda
+        [$uB, $clean] = $this->linkedEmployee($this->unitA);
+        $checkIn($clean, $uB, 320);      // seperti hasil kamera: tanpa tanda
+        [$uC, $other] = $this->linkedEmployee($this->unitB);
+        $checkIn($other, $uC, 1300);     // bertanda tetapi di unit lain
+
+        return [$flagged, $clean, $other];
+    }
+
+    public function test_photo_review_lists_only_flagged_photos_in_scope_and_admin_decisions_are_recorded(): void
+    {
+        [$flagged, $clean, $other] = $this->photoReviewFixture();
+        $admin = $this->makeAdmin(['attendance.view', 'attendance.photos.review'], $this->unitA);
+        $this->actingAs($admin, 'admin');
+
+        $this->get(route('admin.attendance.photos.index'))->assertOk()
+            ->assertViewHas('counts', fn ($c) => $c['perlu'] === 1 && $c['semua'] === 2 && $c['ok'] === 0)
+            ->assertViewHas('records', fn ($p) => $p->pluck('employee_id')->all() === [$flagged->id]);
+
+        $record = AttendanceRecord::where('employee_id', $flagged->id)->firstOrFail();
+
+        // mencurigakan wajib bercatatan
+        $this->post(route('admin.attendance.photos.review', $record), ['decision' => 'suspicious'])->assertSessionHasErrors('note');
+        $this->assertNull($record->fresh()->photo_review_status);
+
+        $this->post(route('admin.attendance.photos.review', $record), ['decision' => 'suspicious', 'note' => 'Wajah berbeda dari pegawai'])->assertSessionHasNoErrors();
+        $record->refresh();
+        $this->assertSame('suspicious', $record->photo_review_status);
+        $this->assertSame($admin->id, $record->photo_reviewed_by_admin_id);
+        $this->assertNotNull($record->photo_reviewed_at);
+        $log = AdminAuditLog::where('event', 'attendance.photo_reviewed')->latest('id')->firstOrFail();
+        $this->assertStringNotContainsString('Wajah berbeda', json_encode($log->details)); // catatan bebas tidak masuk riwayat keamanan
+
+        // keputusan memindahkan absen dari "perlu" ke tab hasilnya
+        $this->get(route('admin.attendance.photos.index'))->assertViewHas('counts', fn ($c) => $c['perlu'] === 0 && $c['suspicious'] === 1);
+        $this->get(route('admin.attendance.photos.index', ['status' => 'suspicious']))->assertSee('Wajah berbeda dari pegawai');
+
+        // lencana di rekap harian
+        $this->get(route('admin.attendance.daily', ['date' => '2026-10-21']))->assertSee('Foto mencurigakan');
+
+        $this->post(route('admin.attendance.photos.review', $record), ['decision' => 'ok'])->assertSessionHasNoErrors();
+        $this->get(route('admin.attendance.daily', ['date' => '2026-10-21']))->assertSee('Foto diverifikasi')->assertDontSee('Foto perlu dicek');
+
+        $this->post(route('admin.attendance.photos.review', $record), ['decision' => 'reset'])->assertSessionHasNoErrors();
+        $this->assertNull($record->fresh()->photo_review_status);
+        $this->assertNull($record->fresh()->photo_reviewed_by_admin_id);
+        $this->get(route('admin.attendance.daily', ['date' => '2026-10-21']))->assertSee('Foto perlu dicek');
+    }
+
+    public function test_photo_review_decisions_need_permission_and_scope(): void
+    {
+        [$flagged, , $other] = $this->photoReviewFixture();
+        $recordA = AttendanceRecord::where('employee_id', $flagged->id)->firstOrFail();
+        $recordB = AttendanceRecord::where('employee_id', $other->id)->firstOrFail();
+
+        // hanya melihat: boleh membuka daftar, tidak boleh memutuskan
+        $viewer = $this->makeAdmin(['attendance.view'], $this->unitA);
+        $this->actingAs($viewer, 'admin')->get(route('admin.attendance.photos.index'))->assertOk()->assertDontSee('Mencurigakan</button>', false);
+        $this->post(route('admin.attendance.photos.review', $recordA), ['decision' => 'ok'])->assertForbidden();
+        $this->post(route('admin.attendance.photos.rematch', $recordA))->assertForbidden();
+
+        // pemutus unit A tidak boleh menyentuh absen unit B
+        $reviewer = $this->makeAdmin(['attendance.view', 'attendance.photos.review'], $this->unitA);
+        $this->actingAs($reviewer, 'admin')->post(route('admin.attendance.photos.review', $recordB), ['decision' => 'ok'])->assertForbidden();
+        $this->assertNull($recordB->fresh()->photo_review_status);
+    }
+
+    public function test_new_check_out_photo_invalidates_an_earlier_review(): void
+    {
+        [$flagged] = $this->photoReviewFixture();
+        $record = AttendanceRecord::where('employee_id', $flagged->id)->firstOrFail();
+        $admin = $this->makeAdmin(['attendance.view', 'attendance.photos.review'], $this->unitA);
+        $this->actingAs($admin, 'admin')->post(route('admin.attendance.photos.review', $record), ['decision' => 'ok'])->assertSessionHasNoErrors();
+        $this->assertSame('ok', $record->fresh()->photo_review_status);
+
+        $user = \App\Models\User::findOrFail($flagged->user_id);
+        Carbon::setTestNow('2026-10-21 08:00:00');
+        $this->actingAs($user, 'pegawai')->withSession(['pegawai_last_activity' => now()->timestamp])
+            ->post(route('pegawai.check-out'), ['photo' => UploadedFile::fake()->image('o.jpg', 1100, 480)])->assertSessionHasNoErrors();
+
+        $this->assertNull($record->fresh()->photo_review_status); // foto baru: perlu diputuskan lagi
+    }
+
+    public function test_rematch_button_queues_jobs_only_when_face_matching_is_on(): void
+    {
+        [$flagged] = $this->photoReviewFixture();
+        $record = AttendanceRecord::where('employee_id', $flagged->id)->firstOrFail();
+        $admin = $this->makeAdmin(['attendance.view', 'attendance.photos.review'], $this->unitA);
+        $this->actingAs($admin, 'admin');
+
+        Queue::fake();
+        $this->post(route('admin.attendance.photos.rematch', $record))->assertSessionHasErrors('face');
+        Queue::assertNothingPushed();
+
+        config(['face.driver' => 'http']);
+        $this->post(route('admin.attendance.photos.rematch', $record))->assertSessionHasNoErrors();
+        Queue::assertPushed(MatchAttendanceFace::class, fn ($job) => $job->recordId === $record->id && $job->prefix === 'check_in');
+        Queue::assertPushed(MatchAttendanceFace::class, 1); // hanya foto masuk yang ada
+    }
+
+    public function test_face_rematch_command_retries_unresolved_statuses_and_reclassifies_stored_scores(): void
+    {
+        $this->faceOn();
+        config(['face.driver' => 'off']);
+        Http::fake(['127.0.0.1:8099/*' => Http::response(['similarity' => 90])]);
+
+        [$u1, $e1] = $this->linkedEmployee($this->unitA);
+        $this->withReference($e1);
+        $this->actingAs($u1, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('a.jpg', 300, 240)])->assertSessionHasNoErrors();
+        [$u2, $e2] = $this->linkedEmployee($this->unitA);
+        $this->actingAs($u2, 'pegawai')->post(route('pegawai.check-in'), ['photo' => UploadedFile::fake()->image('b.jpg', 310, 240)])->assertSessionHasNoErrors();
+        $r1 = AttendanceRecord::where('employee_id', $e1->id)->firstOrFail();
+        $r2 = AttendanceRecord::where('employee_id', $e2->id)->firstOrFail();
+        $this->assertNull($r1->check_in_face_status); // dibuat saat pencocokan mati
+
+        // penyedia mati: perintah menolak
+        $this->artisan('face:rematch')->assertExitCode(1);
+
+        config(['face.driver' => 'http']);
+        $this->artisan('face:rematch', ['--dry-run' => true, '--sync' => true])->assertExitCode(0);
+        Http::assertSentCount(0);
+        $this->assertNull($r1->fresh()->check_in_face_status);
+
+        $this->artisan('face:rematch', ['--sync' => true])->assertExitCode(0);
+        $this->assertSame('match', $r1->fresh()->check_in_face_status);
+        $this->assertSame('no_reference', $r2->fresh()->check_in_face_status);
+        Http::assertSentCount(1);
+
+        // yang sudah punya hasil tidak diulang; yang "no_reference" baru diproses setelah foto acuan ada
+        $this->artisan('face:rematch', ['--sync' => true])->assertExitCode(0);
+        Http::assertSentCount(1);
+        $this->withReference($e2);
+        $this->artisan('face:rematch', ['--sync' => true])->assertExitCode(0);
+        $this->assertSame('match', $r2->fresh()->check_in_face_status);
+        Http::assertSentCount(2);
+
+        // batas diubah: hitung ulang dari skor tersimpan tanpa memanggil penyedia
+        config(['face.match_threshold' => 95, 'face.review_threshold' => 85]);
+        $this->artisan('face:rematch', ['--reclassify' => true])->assertExitCode(0);
+        $this->assertSame('review', $r1->fresh()->check_in_face_status);
+        $this->assertEqualsWithDelta(90.0, (float) $r1->fresh()->check_in_face_score, 0.001);
+        Http::assertSentCount(2);
+
+        $this->artisan('face:rematch', ['--status' => ['salah']])->assertExitCode(1);
     }
 
     private function makePolicy(OrganizationalUnit $unit, string $timezone): AttendancePolicy

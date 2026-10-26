@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AppSettingsController;
 use App\Http\Controllers\Admin\AttendanceCorrectionController;
 use App\Http\Controllers\Admin\AttendanceEntryController;
 use App\Http\Controllers\Admin\AttendanceHolidayController;
+use App\Http\Controllers\Admin\AttendancePhotoReviewController;
 use App\Http\Controllers\Admin\AttendancePolicyController;
 use App\Http\Controllers\Admin\AttendanceProofController;
 use App\Http\Controllers\Admin\AttendanceReportController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Admin\EmployeeAccountController;
 use App\Http\Controllers\Admin\EmployeeAssignmentController;
 use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\EmployeeDocumentController;
+use App\Http\Controllers\Admin\EmployeeFaceController;
 use App\Http\Controllers\Admin\EmployeeStatusController;
 use App\Http\Controllers\Admin\FingerprintDeviceController;
 use App\Http\Controllers\Admin\FingerprintLogController;
@@ -33,6 +35,7 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SchoolController;
 use App\Http\Controllers\Admin\SecuritySettingsController;
 use App\Http\Controllers\Admin\StudentAttendanceController;
+use App\Http\Controllers\Admin\UnitAdminProvisioningController;
 use App\Http\Controllers\Admin\StudentAttendanceSettingController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\TwoFactorController;
@@ -102,6 +105,10 @@ Route::middleware(['auth', 'admin.session', 'two-factor.enrolled'])->group(funct
         ->middleware(['can:settings.update', 'throttle:5,1'])->name('settings.test-mail');
 
     Route::resource('roles', RoleController::class)->except('show');
+    Route::get('admins/provision-units', [UnitAdminProvisioningController::class, 'index'])
+        ->middleware('can:admins.create')->name('unit-admins.index');
+    Route::post('admins/provision-units', [UnitAdminProvisioningController::class, 'store'])
+        ->middleware(['can:admins.create', 'throttle:6,1'])->name('unit-admins.store');
     Route::resource('admins', AdminController::class)->except('show');
 
     Route::prefix('employees')->name('employees.')->group(function () {
@@ -141,6 +148,12 @@ Route::middleware(['auth', 'admin.session', 'two-factor.enrolled'])->group(funct
             ->middleware('can:employees.documents.view')->name('documents.download');
         Route::delete('{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy'])
             ->middleware('can:employees.documents.manage')->name('documents.destroy');
+        Route::post('{employee}/faces', [EmployeeFaceController::class, 'store'])
+            ->middleware('can:employees.faces.manage')->name('faces.store');
+        Route::get('{employee}/faces/{face}', [EmployeeFaceController::class, 'image'])
+            ->middleware('can:employees.faces.manage')->name('faces.image');
+        Route::delete('{employee}/faces/{face}', [EmployeeFaceController::class, 'destroy'])
+            ->middleware('can:employees.faces.manage')->name('faces.destroy');
     });
 
     Route::prefix('programs')->name('programs.')->group(function () {
@@ -265,6 +278,12 @@ Route::middleware(['auth', 'admin.session', 'two-factor.enrolled'])->group(funct
             Route::get('daily', [AttendanceReportController::class, 'daily'])->name('daily');
             Route::get('monthly', [AttendanceReportController::class, 'monthly'])->name('monthly');
             Route::get('records/{record}/photo/{type}', [AttendanceProofController::class, 'photo'])->whereNumber('record')->name('photo');
+            Route::get('photos', [AttendancePhotoReviewController::class, 'index'])->name('photos.index');
+        });
+
+        Route::middleware('can:attendance.photos.review')->group(function () {
+            Route::post('records/{record}/photo-review', [AttendancePhotoReviewController::class, 'review'])->whereNumber('record')->name('photos.review');
+            Route::post('records/{record}/face-rematch', [AttendancePhotoReviewController::class, 'rematch'])->whereNumber('record')->name('photos.rematch');
         });
 
         Route::middleware('can:attendance.corrections.review')->group(function () {
