@@ -1,0 +1,237 @@
+<?php
+
+namespace App\Http\Controllers\Api\Mobile;
+
+use App\Enums\EmployeeStatus;
+use App\Helpers\AttendanceClock;
+use App\Http\Controllers\Controller;
+use App\Models\AttendanceCorrection;
+use App\Models\AttendanceRecord;
+use App\Models\Employee;
+use App\Models\OrganizationalUnit;
+use App\Services\AttendancePolicyResolver;
+use App\Services\AttendanceService;
+use App\Services\PegawaiPortalAccess;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Absen & koreksi pegawai lewat aplikasi mobile. Memakai AttendanceService yang sama dengan portal web,
+ * jadi semua aturan (kebijakan unit, geofence, foto, hari libur, jendela koreksi) otomatis berlaku.
+ * Pegawai ditentukan dari token — tidak ada parameter id dari request.
+ */
+class EmployeeAttendanceController extends Controller
+{
+    private const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+    private const PHOTO_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+
+    public function dashboard(Request $request, PegawaiPortalAccess $access, AttendancePolicyResolver $resolver): JsonResponse
+    {
+        $employee = $this->employee($request, $access);
+        $unitId = $resolver->unitFor($employee, AttendanceClock::now());
+        $policy = $unitId ? $resolver->policyForUnit($unitId) : null;
+        $tz = $resolver->timezoneFor($policy);
+        $now = AttendanceClock::now($tz);
+        $holiday = $unitId ? $resolver->holidayFor($unitId, $now->toDateString()) : null;
+
+        $today = AttendanceRecord::query()
+            ->where('employee_id', $employee->id)->where('attendance_date', $now->toDateString())->first();
+        $recent = AttendanceRecord::query()
+            ->where('employee_id', $employee->id)->orderByDesc('attendance_date')->limit(7)->get();
+
+        return response()->json([
+            'unit' => $unitId ? OrganizationalUnit::query()->whereKey($unitId)->value('name') : null,
+            'timezone' => $tz,
+            'serverTime' => $now->toIso8601String(),
+            'holiday' => $holiday ? ['name' => $holiday->name] : null,
+            'needsPhoto' => (bool) $policy?->require_photo,
+            'needsLocation' => (bool) $policy?->require_location,
+            'canCheckIn' => (bool) (! $today && $policy && ! $holiday
+                && $policy->isWorkDay($now->isoWeekday()) && $employee->status === EmployeeStatus::Active),
+            'canCheckOut' => (bool) ($today && $today->check_in_at && ! $today->check_out_at),
+            'today' => $today ? $this->recordPayload($today, $tz) : null,
+            'recent' => $recent->map(fn ($r) => $this->recordPayload($r, $tz))->values(),
+        ]);
+    }
+
+    public function history(Request $request, PegawaiPortalAccess $access, AttendancePolicyResolver $resolver): JsonResponse
+    {
+        $employee = $this->employee($request, $access);
+        $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
+
+        $tz = $resolver->timezoneForEmployee($employee);
+        $thisMonth = AttendanceClock::today($tz)->startOfMonth();
+        $month = $request->filled('month')
+            ? Carbon::createFromFormat('Y-m-d', $request->string('month').'-01', $tz)->startOfDay()
+            : $thisMonth;
+        if ($month->gt($thisMonth)) {
+            $month = $thisMonth;
+        }
+
+        $records = AttendanceRecord::query()
+            ->where('employee_id', $employee->id)
+            ->whereBetween('attendance_date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->orderByDesc('attendance_date')
+            ->get();
+
+        return response()->json([
+            'month' => $month->format('Y-m'),
+            'records' => $records->map(fn ($r) => $this->recordPayload($r, $tz))->values(),
+        ]);
+    }
+
+    public function corrections(Request $request, PegawaiPortalAccess $access): JsonResponse
+    {
+        $employee = $this->employee($request, $access);
+
+        return response()->json(
+            AttendanceCorrection::query()->where('employee_id', $employee->id)->latest('id')->limit(30)->get()
+                ->map(fn ($c) => $this->correctionPayload($c))->values()
+        );
+    }
+
+    public function storeCorrection(Request $request, PegawaiPortalAccess $access, AttendanceService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'attendanceDate' => ['required', 'date_format:Y-m-d'],
+            'requestedCheckIn' => ['nullable', 'date_format:H:i'],
+            'requestedCheckOut' => ['nullable', 'date_format:H:i'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $correction = $service->submitCorrection($this->employee($request, $access), $request->user(), [
+            'attendance_date' => $data['attendanceDate'],
+            'requested_check_in' => $data['requestedCheckIn'] ?? null,
+            'requested_check_out' => $data['requestedCheckOut'] ?? null,
+            'reason' => $data['reason'],
+        ]);
+
+        return response()->json($this->correctionPayload($correction), 201);
+    }
+
+    public function checkIn(Request $request, PegawaiPortalAccess $access, AttendanceService $service): JsonResponse
+    {
+        return $this->withProof($request, function (array $proof) use ($request, $access, $service) {
+            $record = $service->checkIn($this->employee($request, $access), $request->ip(), $proof + ['source' => 'mobile']);
+
+            return [$record, AttendanceClock::forUnit($record->organizational_unit_id), 'Check-in tercatat.'];
+        });
+    }
+
+    public function checkOut(Request $request, PegawaiPortalAccess $access, AttendanceService $service): JsonResponse
+    {
+        return $this->withProof($request, function (array $proof) use ($request, $access, $service) {
+            $record = $service->checkOut($this->employee($request, $access), $request->ip(), $proof);
+
+            return [$record, AttendanceClock::forUnit($record->organizational_unit_id), 'Check-out tercatat.'];
+        });
+    }
+
+    /**
+     * Validasi bukti absen (lokasi + foto base64), ubah foto menjadi file sementara bernilai UploadedFile
+     * (yang dibutuhkan AttendanceService), jalankan aksi, lalu hapus file sementara apa pun hasilnya.
+     *
+     * @param  callable(array): array{0: AttendanceRecord, 1: string, 2: string}  $action
+     */
+    private function withProof(Request $request, callable $action): JsonResponse
+    {
+        $data = $request->validate([
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'photoBase64' => ['nullable', 'string', 'max:3500000'],
+        ]);
+
+        $tmp = null;
+        $proof = [
+            'latitude' => $data['latitude'] ?? null,
+            'longitude' => $data['longitude'] ?? null,
+            'accuracy' => $data['accuracy'] ?? null,
+            'photo' => null,
+        ];
+
+        try {
+            if (! empty($data['photoBase64'])) {
+                [$proof['photo'], $tmp] = $this->photoFromBase64($data['photoBase64']);
+            }
+
+            [$record, $tz, $message] = $action($proof);
+        } finally {
+            if ($tmp && is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
+
+        return response()->json([
+            'message' => $message,
+            'record' => $this->recordPayload($record, $tz),
+        ]);
+    }
+
+    /** @return array{0: UploadedFile, 1: string} [file, path sementara] */
+    private function photoFromBase64(string $encoded): array
+    {
+        $encoded = preg_replace('/^data:[^;]+;base64,/', '', trim($encoded));
+        $binary = base64_decode((string) $encoded, true);
+
+        if ($binary === false || $binary === '') {
+            throw ValidationException::withMessages(['photo' => 'Foto tidak valid. Ambil ulang foto bukti.']);
+        }
+        if (strlen($binary) > self::MAX_PHOTO_BYTES) {
+            throw ValidationException::withMessages(['photo' => 'Ukuran foto maksimal 2 MB.']);
+        }
+
+        // Jenis file ditentukan dari isinya, bukan dari klaim klien.
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($binary) ?: '';
+        if (! isset(self::PHOTO_TYPES[$mime]) || @getimagesizefromstring($binary) === false) {
+            throw ValidationException::withMessages(['photo' => 'Foto harus berformat JPEG, PNG, atau WebP.']);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'att');
+        file_put_contents($tmp, $binary);
+
+        return [new UploadedFile($tmp, 'bukti.'.self::PHOTO_TYPES[$mime], $mime, null, true), $tmp];
+    }
+
+    private function recordPayload(AttendanceRecord $record, string $tz): array
+    {
+        return [
+            'id' => (string) $record->id,
+            'date' => $record->attendance_date->toDateString(),
+            'checkInAt' => AttendanceClock::toLocal($record->check_in_at, $tz)?->toIso8601String(),
+            'checkOutAt' => AttendanceClock::toLocal($record->check_out_at, $tz)?->toIso8601String(),
+            'latitude' => $record->check_in_lat !== null ? (float) $record->check_in_lat : null,
+            'longitude' => $record->check_in_lng !== null ? (float) $record->check_in_lng : null,
+            'status' => $record->status->value,
+            'statusLabel' => $record->status->label(),
+            'lateMinutes' => $record->late_minutes,
+            'workMinutes' => $record->work_minutes,
+        ];
+    }
+
+    private function correctionPayload(AttendanceCorrection $c): array
+    {
+        $time = fn (?string $v) => $v ? substr($v, 0, 5) : null;
+
+        return [
+            'id' => (string) $c->id,
+            'attendanceDate' => $c->attendance_date->toDateString(),
+            'requestedCheckIn' => $time($c->requested_check_in),
+            'requestedCheckOut' => $time($c->requested_check_out),
+            'reason' => $c->reason,
+            'status' => $c->status->label(),
+            'statusValue' => $c->status->value,
+            'reviewNote' => $c->review_note,
+            'createdAt' => $c->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function employee(Request $request, PegawaiPortalAccess $access): Employee
+    {
+        return $access->employeeFor($request->user()) ?? abort(403, 'Akun belum dihubungkan ke data pegawai.');
+    }
+}

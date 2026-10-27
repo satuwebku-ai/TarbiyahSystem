@@ -28,7 +28,7 @@
               <td>{{ $local($rec?->check_out_at, $day['tz']) ?? '—' }}</td>
               <td>{{ $rec?->late_minutes ? $rec->late_minutes.' menit' : '—' }}</td>
               <td>{{ $dur($rec?->work_minutes) }}</td>
-              <td class="small text-secondary">{{ $rec ? ['web' => 'Check-in', 'correction' => 'Koreksi', 'manual' => 'Dicatat pengelola'][$rec->source] ?? $rec->source : '—' }}</td>
+              <td class="small text-secondary">{{ $rec ? ['web' => 'Check-in', 'mobile' => 'Aplikasi mobile', 'correction' => 'Koreksi', 'manual' => 'Dicatat pengelola'][$rec->source] ?? $rec->source : '—' }}</td>
               <td class="small text-nowrap">
                 @if($rec?->check_in_photo)<a href="{{ route('admin.attendance.photo', [$rec, 'in']) }}" target="_blank" rel="noopener" class="text-decoration-none">Foto masuk</a>@endif
                 @if($rec?->check_out_photo)<a href="{{ route('admin.attendance.photo', [$rec, 'out']) }}" target="_blank" rel="noopener" class="text-decoration-none ms-2">Foto pulang</a>@endif

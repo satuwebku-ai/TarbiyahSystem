@@ -2,7 +2,9 @@
 
 use App\Http\Middleware\UseGuard;
 use App\Http\Middleware\EnforceAdminSessionTimeout;
+use App\Http\Middleware\AuthenticateMobileToken;
 use App\Http\Middleware\EnforcePegawaiSession;
+use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -19,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
             // Mesin fingerprint (push ADMS): tanpa sesi/CSRF, di luar grup web.
             Route::group([], base_path('routes/iclock.php'));
+
+            // API aplikasi mobile: token Bearer, tanpa sesi/CSRF, dapat dipanggil dari host mana pun.
+            Route::middleware(['api', 'mobile.json'])->prefix('api/mobile')->name('mobile.')
+                ->group(base_path('routes/mobile.php'));
 
             if (($d['routing_mode'] ?? 'path') === 'subdomain') {
                 Route::middleware('web')
@@ -71,6 +77,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.session' => EnforceAdminSessionTimeout::class,
             'pegawai.session' => EnforcePegawaiSession::class,
             'two-factor.enrolled' => EnsureTwoFactorEnrolled::class,
+            'mobile.auth' => AuthenticateMobileToken::class,
+            'mobile.json' => ForceJsonResponse::class,
         ]);
 
         // Belum login -> halaman login sesuai subdomain.
@@ -122,6 +130,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Jangan ganggu API/JSON, mesin fingerprint, dan file statis (favicon, gambar, dll).
         if ($request->expectsJson()
             || $request->is('iclock/*')
+            || $request->is('api/*')
             || pathinfo($request->path(), PATHINFO_EXTENSION) !== '') {
             return null;
         }

@@ -34,7 +34,7 @@ class AttendanceService
     // ---- absen sendiri -------------------------------------------------
 
     /**
-     * @param  array{latitude?: float|string|null, longitude?: float|string|null, accuracy?: float|string|null, photo?: UploadedFile|null}  $proof
+     * @param  array{latitude?: float|string|null, longitude?: float|string|null, accuracy?: float|string|null, photo?: UploadedFile|null, source?: string}  $proof
      */
     public function checkIn(Employee $employee, ?string $ip, array $proof = []): AttendanceRecord
     {
@@ -64,7 +64,7 @@ class AttendanceService
                     'late_minutes' => $late,
                     'scheduled_start' => $policy->work_start,
                     'scheduled_end' => $policy->work_end,
-                    'source' => 'web',
+                    'source' => $proof['source'] ?? 'web',
                     'check_in_ip' => $ip,
                     ]);
 
