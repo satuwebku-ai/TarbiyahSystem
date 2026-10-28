@@ -167,6 +167,9 @@ class MobileApiTest extends TestCase
             ->assertJsonPath('canCheckIn', true)
             ->assertJsonPath('canCheckOut', false)
             ->assertJsonPath('needsPhoto', false)
+            ->assertJsonPath('workStart', '07:00')
+            ->assertJsonPath('workEnd', '15:00')
+            ->assertJsonMissingPath('geoLatitude')
             ->assertJsonPath('unit', 'Sekolah A')
             ->assertJsonPath('today', null);
 

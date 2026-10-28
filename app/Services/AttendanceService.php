@@ -349,7 +349,7 @@ class AttendanceService
             $this->fail('photo', 'Foto selfie wajib diambil untuk absen.');
         }
         if ($policy?->require_location && ($lat === null || $lng === null)) {
-            $this->fail('location', 'Lokasi wajib diaktifkan. Izinkan akses lokasi di browser lalu coba lagi.');
+            $this->fail('location', 'Lokasi wajib diaktifkan. Izinkan akses lokasi di perangkat atau browser Anda, lalu coba lagi.');
         }
 
         $distance = null;

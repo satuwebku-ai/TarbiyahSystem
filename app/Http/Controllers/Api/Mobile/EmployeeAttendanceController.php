@@ -50,6 +50,11 @@ class EmployeeAttendanceController extends Controller
             'holiday' => $holiday ? ['name' => $holiday->name] : null,
             'needsPhoto' => (bool) $policy?->require_photo,
             'needsLocation' => (bool) $policy?->require_location,
+            // Aturan kebijakan untuk ditampilkan saja; keputusan tetap diambil server. Titik koordinat sekolah sengaja tidak dikirim.
+            'workStart' => $policy?->work_start ? substr((string) $policy->work_start, 0, 5) : null,
+            'workEnd' => $policy?->work_end ? substr((string) $policy->work_end, 0, 5) : null,
+            'lateToleranceMinutes' => $policy?->late_tolerance_minutes,
+            'geofenceRadiusM' => $policy?->require_location && $policy->hasGeofence() ? $policy->geo_radius_m : null,
             'canCheckIn' => (bool) (! $today && $policy && ! $holiday
                 && $policy->isWorkDay($now->isoWeekday()) && $employee->status === EmployeeStatus::Active),
             'canCheckOut' => (bool) ($today && $today->check_in_at && ! $today->check_out_at),
