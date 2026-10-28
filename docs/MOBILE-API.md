@@ -1,6 +1,6 @@
 # API Aplikasi Mobile (tarbiyah-mobile)
 
-Aplikasi Expo `tarbiyah-mobile` memakai API JSON ini untuk login, presensi pegawai, rekap kehadiran pegawai dan pelajar,
+Aplikasi Expo `tarbiyah-mobile` memakai API JSON ini untuk login, presensi pegawai, rekap kehadiran pelajar,
 dan notifikasi. Kodenya: `routes/mobile.php`, `app/Http/Controllers/Api/Mobile/*`, token di tabel `mobile_tokens`.
 
 ## Pasang
@@ -36,20 +36,14 @@ jadi kuncian di web berlaku di mobile dan sebaliknya). CAPTCHA tidak dipakai di 
 | POST | `/login` | - | `{role, identifier, password, twoFactorCode?, deviceName?}` -> `{token, expiresAt, user}` |
 | POST | `/two-factor/setup` | - | Pegawai: `{identifier, password}` -> `{secret, otpauthUri, issuer, account}`. Membuat rahasia 2FA baru (belum aktif) |
 | POST | `/two-factor/confirm` | - | Pegawai: `{identifier, password, code, deviceName?}` -> `{token, expiresAt, user, recoveryCodes}`. Mengaktifkan 2FA dan langsung masuk |
-| GET | `/security/two-factor` | pegawai | Status 2FA akun: `{featureEnabled, enabled, pending, required, recoveryCodesRemaining}` |
-| POST | `/security/two-factor/setup` | pegawai | Membuat rahasia 2FA baru (belum aktif) -> `{secret, otpauthUri, issuer, account}` |
-| POST | `/security/two-factor/confirm` | pegawai | `{code}` -> 2FA aktif + `{recoveryCodes, ...status}` (sekali saja) |
-| POST | `/security/two-factor/recovery-codes` | pegawai | `{password}` -> kode pemulihan baru, yang lama tidak berlaku |
-| POST | `/security/two-factor/disable` | pegawai | `{password}` -> mematikan 2FA (ditolak `403 two_factor_required` bila kebijakan mewajibkan) |
 | GET | `/me` | semua | `{id, name, role, identifier}` |
 | POST | `/logout` | semua | Mencabut token ini |
 | GET | `/notifications` | semua | 50 terbaru: `[{id, kind, title, body, icon, readAt, createdAt}]` |
 | POST | `/notifications/read` | semua | `{ids?: string[]}`; tanpa `ids` = semua dibaca |
 | PUT | `/push-token` | semua | `{token, platform?}` (`token` = Expo push token, `platform` = `android`\|`ios`). Mendaftarkan perangkat ini untuk notifikasi push -> `{registered: true}` |
 | DELETE | `/push-token` | semua | Berhenti menerima push di perangkat ini (keluar dari akun juga otomatis menghentikannya) |
-| GET | `/employee/attendance/dashboard` | pegawai | Status hari ini, kebijakan (`needsPhoto`, `needsLocation`, `workStart`, `workEnd`, `lateToleranceMinutes`, `checkinDeadline`, `checkinClosed`, `geofenceRadiusM`; hanya untuk ditampilkan, titik koordinat tidak dikirim), `canCheckIn`, `canCheckOut`, `recent` |
+| GET | `/employee/attendance/dashboard` | pegawai | Status hari ini, kebijakan (`needsPhoto`, `needsLocation`), `canCheckIn`, `canCheckOut`, `recent` |
 | GET | `/employee/attendance/history?month=YYYY-MM` | pegawai | `{month, records[]}` |
-| GET | `/employee/attendance/summary?month=YYYY-MM` | pegawai | Rekap bulanan: `{month, monthLabel, total, percentage, counts{present,late,permit,sick,leave,absent}, workMinutes, lateMinutes}` |
 | POST | `/employee/attendance/check-in` | pegawai | `{latitude?, longitude?, accuracy?, photoBase64?}` -> `{message, record}` |
 | POST | `/employee/attendance/check-out` | pegawai | sama dengan check-in |
 | GET | `/employee/attendance/corrections` | pegawai | 30 pengajuan terbaru |
@@ -63,19 +57,6 @@ Presensi memakai `AttendanceService` yang sama dengan portal web, sehingga kebij
 hari libur, pencocokan wajah, dan jendela koreksi otomatis berlaku. Catatan dari mobile bertanda `source = mobile`
 (tampil "Aplikasi mobile" di presensi harian admin). Foto dikirim sebagai base64 (JPEG/PNG/WebP, maks 2 MB);
 jenis file dibaca dari isinya, bukan dari klaim klien. Waktu dikembalikan ISO 8601 dengan offset zona waktu unit.
-
-## Rekap bulanan pegawai
-
-`GET /employee/attendance/summary?month=YYYY-MM` memakai `AttendanceRecapService` yang sama dengan laporan bulanan di web, sehingga angkanya
-selalu sama dengan yang dilihat admin. `month` kosong atau melewati bulan ini = bulan ini.
-
-- `counts`: jumlah hari per status. `absent` mencakup tidak hadir otomatis (hari kerja yang sudah lewat tanpa catatan).
-  Hari libur, hari bukan kerja, hari ini yang belum ada catatan, dan hari yang akan datang tidak dihitung.
-- `total`: jumlah semua hari yang terhitung (jumlah `counts`).
-- `percentage`: `(present + late) / total * 100`, satu desimal; `null` bila `total` = 0 (sama dengan rumus rekap pelajar).
-- `workMinutes` / `lateMinutes`: akumulasi menit kerja dan menit terlambat pada bulan itu.
-
-Rekap pelajar (`/student/attendance`) sudah mengirim `counts` per status (`present`, `late`, `permit`, `sick`, `absent`) selain `total` dan `percentage`.
 
 ## Pendaftaran 2FA dari aplikasi
 
@@ -91,15 +72,6 @@ Aturan: hanya pegawai; fitur 2FA harus aktif di Kebijakan Keamanan (`403 two_fac
 aktif ditolak (`422 two_factor_already_enabled`, rahasia lama tidak tertimpa; mematikan atau mengganti 2FA tetap lewat portal web);
 `confirm` tanpa `setup` -> `422 two_factor_setup_missing`. Batas percobaan: kata sandi memakai kunci yang sama dengan login,
 tebakan kode memakai kunci yang sama dengan tantangan 2FA saat login. Peristiwa dicatat di audit log (`pegawai.two_factor_enabled`, channel `mobile`).
-
-## Pengaturan 2FA dari menu Profil
-
-Pegawai yang sudah masuk mengelola 2FA dari **Profil > Keamanan akun** di aplikasi (layar `security`), memakai token Bearer
-dan aturan yang sama dengan Profil & Keamanan di portal web: setup -> konfirmasi kode 6 digit -> kode pemulihan tampil sekali.
-Membuat kode pemulihan baru dan mematikan 2FA meminta kata sandi lagi (salah berulang dikunci, `429 too_many_attempts`).
-Peristiwa tercatat di audit log dengan channel `mobile`: `pegawai.two_factor_enabled`, `pegawai.two_factor_recovery_regenerated`,
-`pegawai.two_factor_disabled`, `pegawai.security_password_failed`. Jalur pendaftaran dari layar login (di atas) tetap ada,
-hanya untuk akun yang WAJIB 2FA dan belum punya token.
 
 ## Notifikasi push
 
