@@ -23,7 +23,7 @@
           @else
             <div class="small text-secondary mb-3">Jam kerja {{ substr($policy->work_start, 0, 5) }}–{{ substr($policy->work_end, 0, 5) }} · toleransi {{ $policy->late_tolerance_minutes }} menit@if($policy->checkinDeadlineLabel()) · batas check-in {{ $policy->checkinDeadlineLabel() }}@endif</div>
             @if(! $today && $policy->checkinClosed($now))
-              <div class="alert alert-warning py-2">Batas check-in pagi ({{ $policy->checkinDeadlineLabel() }}) sudah lewat. Bila Anda hadir, ajukan koreksi absen.</div>
+              <div class="alert alert-warning py-2">Batas check-in pagi ({{ $policy->checkinDeadlineLabel() }}) sudah lewat. Bila Anda hadir, ajukan koreksi absen. <a href="#c_date" class="alert-link">Ajukan koreksi untuk hari ini</a></div>
             @endif
           @endif
 
@@ -62,7 +62,7 @@
         <div class="card-body">
           <form method="POST" action="{{ route('pegawai.corrections.store') }}" class="row g-2 align-items-end">
             @csrf
-            <div class="col-md-4"><label class="form-label small mb-1" for="c_date">Tanggal</label><input id="c_date" type="date" name="attendance_date" value="{{ old('attendance_date') }}" class="form-control" required></div>
+            <div class="col-md-4"><label class="form-label small mb-1" for="c_date">Tanggal</label><input id="c_date" type="date" name="attendance_date" value="{{ old('attendance_date', (! $today && $policy?->checkinClosed($now)) ? $now->toDateString() : null) }}" class="form-control" required></div>
             <div class="col-md-4"><label class="form-label small mb-1" for="c_in">Jam masuk benar</label><input id="c_in" type="time" name="requested_check_in" value="{{ old('requested_check_in') }}" class="form-control"></div>
             <div class="col-md-4"><label class="form-label small mb-1" for="c_out">Jam pulang benar</label><input id="c_out" type="time" name="requested_check_out" value="{{ old('requested_check_out') }}" class="form-control"></div>
             <div class="col-12"><label class="form-label small mb-1" for="c_reason">Alasan</label><input id="c_reason" name="reason" value="{{ old('reason') }}" class="form-control" maxlength="500" required></div>
