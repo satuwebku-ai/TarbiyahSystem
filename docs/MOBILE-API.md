@@ -47,7 +47,7 @@ jadi kuncian di web berlaku di mobile dan sebaliknya). CAPTCHA tidak dipakai di 
 | POST | `/notifications/read` | semua | `{ids?: string[]}`; tanpa `ids` = semua dibaca |
 | PUT | `/push-token` | semua | `{token, platform?}` (`token` = Expo push token, `platform` = `android`\|`ios`). Mendaftarkan perangkat ini untuk notifikasi push -> `{registered: true}` |
 | DELETE | `/push-token` | semua | Berhenti menerima push di perangkat ini (keluar dari akun juga otomatis menghentikannya) |
-| GET | `/employee/attendance/dashboard` | pegawai | Status hari ini, kebijakan (`needsPhoto`, `needsLocation`, `workStart`, `workEnd`, `lateToleranceMinutes`, `geofenceRadiusM`; hanya untuk ditampilkan, titik koordinat tidak dikirim), `canCheckIn`, `canCheckOut`, `recent` |
+| GET | `/employee/attendance/dashboard` | pegawai | Status hari ini, kebijakan (`needsPhoto`, `needsLocation`, `workStart`, `workEnd`, `lateToleranceMinutes`, `checkinDeadline`, `checkinClosed`, `geofenceRadiusM`; hanya untuk ditampilkan, titik koordinat tidak dikirim), `canCheckIn`, `canCheckOut`, `recent` |
 | GET | `/employee/attendance/history?month=YYYY-MM` | pegawai | `{month, records[]}` |
 | POST | `/employee/attendance/check-in` | pegawai | `{latitude?, longitude?, accuracy?, photoBase64?}` -> `{message, record}` |
 | POST | `/employee/attendance/check-out` | pegawai | sama dengan check-in |

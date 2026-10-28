@@ -21,7 +21,10 @@
           @elseif(! $policy->isWorkDay($now->isoWeekday()))
             <div class="alert alert-secondary py-2">Hari ini bukan hari kerja.</div>
           @else
-            <div class="small text-secondary mb-3">Jam kerja {{ substr($policy->work_start, 0, 5) }}–{{ substr($policy->work_end, 0, 5) }} · toleransi {{ $policy->late_tolerance_minutes }} menit</div>
+            <div class="small text-secondary mb-3">Jam kerja {{ substr($policy->work_start, 0, 5) }}–{{ substr($policy->work_end, 0, 5) }} · toleransi {{ $policy->late_tolerance_minutes }} menit@if($policy->checkinDeadlineLabel()) · batas check-in {{ $policy->checkinDeadlineLabel() }}@endif</div>
+            @if(! $today && $policy->checkinClosed($now))
+              <div class="alert alert-warning py-2">Batas check-in pagi ({{ $policy->checkinDeadlineLabel() }}) sudah lewat. Bila Anda hadir, ajukan koreksi absen.</div>
+            @endif
           @endif
 
           <div class="row text-center g-2 mb-3">

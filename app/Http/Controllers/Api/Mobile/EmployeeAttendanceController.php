@@ -54,9 +54,11 @@ class EmployeeAttendanceController extends Controller
             'workStart' => $policy?->work_start ? substr((string) $policy->work_start, 0, 5) : null,
             'workEnd' => $policy?->work_end ? substr((string) $policy->work_end, 0, 5) : null,
             'lateToleranceMinutes' => $policy?->late_tolerance_minutes,
+            'checkinDeadline' => $policy?->checkinDeadlineLabel(),
+            'checkinClosed' => (bool) $policy?->checkinClosed($now),
             'geofenceRadiusM' => $policy?->require_location && $policy->hasGeofence() ? $policy->geo_radius_m : null,
             'canCheckIn' => (bool) (! $today && $policy && ! $holiday
-                && $policy->isWorkDay($now->isoWeekday()) && $employee->status === EmployeeStatus::Active),
+                && $policy->isWorkDay($now->isoWeekday()) && ! $policy->checkinClosed($now) && $employee->status === EmployeeStatus::Active),
             'canCheckOut' => (bool) ($today && $today->check_in_at && ! $today->check_out_at),
             'today' => $today ? $this->recordPayload($today, $tz) : null,
             'recent' => $recent->map(fn ($r) => $this->recordPayload($r, $tz))->values(),

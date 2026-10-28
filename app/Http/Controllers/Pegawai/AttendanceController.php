@@ -44,7 +44,7 @@ class AttendanceController extends Controller
             'needsPhoto' => (bool) $policy?->require_photo,
             'needsLocation' => (bool) $policy?->require_location,
             'canIn' => ! $today && $policy && ! $holiday
-                && $policy->isWorkDay($now->isoWeekday()) && $employee->status === EmployeeStatus::Active,
+                && $policy->isWorkDay($now->isoWeekday()) && ! $policy->checkinClosed($now) && $employee->status === EmployeeStatus::Active,
             'canOut' => $today && $today->check_in_at && ! $today->check_out_at,
             'recent' => AttendanceRecord::query()->where('employee_id', $employee->id)->orderByDesc('attendance_date')->limit(7)->get(),
             'corrections' => AttendanceCorrection::query()->where('employee_id', $employee->id)->latest('id')->limit(10)->get(),

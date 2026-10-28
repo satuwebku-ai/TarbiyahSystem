@@ -123,6 +123,7 @@ class AttendancePolicyController extends Controller
             'work_start' => ['required', 'date_format:H:i'],
             'work_end' => ['required', 'date_format:H:i', 'after:work_start'],
             'late_tolerance_minutes' => ['required', 'integer', 'between:0,240'],
+            'checkin_deadline' => ['nullable', 'date_format:H:i', 'after:work_start', 'before:work_end'],
             'timezone' => ['required', 'string', Rule::in(array_keys(config('attendance.timezones')))],
             'is_active' => ['required', 'boolean'],
             'require_location' => ['sometimes', 'boolean'],
@@ -131,6 +132,8 @@ class AttendancePolicyController extends Controller
             'geo_longitude' => ['nullable', 'required_if:require_location,1', 'numeric', 'between:-180,180'],
             'geo_radius_m' => ['nullable', 'required_if:require_location,1', 'integer', 'between:20,5000'],
         ], [
+            'checkin_deadline.after' => 'Batas check-in harus setelah jam masuk.',
+            'checkin_deadline.before' => 'Batas check-in harus sebelum jam pulang.',
             'geo_latitude.required_if' => 'Isi titik lokasi sekolah (latitude) bila absen wajib di lokasi.',
             'geo_longitude.required_if' => 'Isi titik lokasi sekolah (longitude) bila absen wajib di lokasi.',
             'geo_radius_m.required_if' => 'Isi radius yang diizinkan bila absen wajib di lokasi.',

@@ -39,6 +39,9 @@ class AttendanceService
     public function checkIn(Employee $employee, ?string $ip, array $proof = []): AttendanceRecord
     {
         [$unitId, $policy, $now] = $this->requireWorkingContext($employee);
+        if ($policy->checkinClosed($now)) {
+            $this->fail('attendance', "Batas check-in pagi pukul {$policy->checkinDeadlineLabel()} sudah lewat. Bila Anda hadir, ajukan koreksi absen.");
+        }
         $date = $now->toDateString();
         $geo = $this->verifyProof($policy, $proof, 'check_in');
 

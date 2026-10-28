@@ -457,6 +457,31 @@ class MobileApiTest extends TestCase
         $this->getJson('/api/mobile/security/two-factor')->assertStatus(401);
     }
 
+    // ---- batas check-in pagi --------------------------------------------------------------------
+
+    public function test_checkin_is_refused_after_the_morning_deadline_and_allowed_until_its_last_minute(): void
+    {
+        $this->pegawai();
+        $token = $this->login('pegawai1');
+
+        // Sekarang 08:30 WITA. Batas 08:00 sudah lewat.
+        $this->policy->update(['checkin_deadline' => '08:00']);
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/dashboard')
+            ->assertOk()->assertJsonPath('checkinDeadline', '08:00')->assertJsonPath('checkinClosed', true)->assertJsonPath('canCheckIn', false);
+        $this->withToken($token)->postJson('/api/mobile/employee/attendance/check-in')
+            ->assertStatus(422)->assertJsonValidationErrors('attendance');
+        $this->assertSame(0, AttendanceRecord::count());
+
+        // Batas tepat 08:30 masih berlaku sampai akhir menit itu.
+        $this->policy->update(['checkin_deadline' => '08:30']);
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/dashboard')
+            ->assertJsonPath('checkinClosed', false)->assertJsonPath('canCheckIn', true);
+
+        // Tanpa batas: berperilaku seperti sebelumnya.
+        $this->policy->update(['checkin_deadline' => null]);
+        $this->withToken($token)->postJson('/api/mobile/employee/attendance/check-in')->assertOk();
+    }
+
     // ---- bantu ----------------------------------------------------------------------------------
 
     private function requireTwoFactor(): void
