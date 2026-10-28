@@ -121,6 +121,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ], 500);
     });
 
+    // 419 (token CSRF/sesi kedaluwarsa: halaman login dibiarkan terbuka lama, halaman lama dari cache/tombol Kembali,
+    // atau cookie sesi hilang) -> kembali ke halaman asal dengan pesan, bukan halaman buntu "Halaman Kedaluwarsa".
+    // Isian form sengaja tidak dikembalikan agar kata sandi/kode tidak ikut tersimpan di sesi.
+    $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, Request $request) {
+        if ($e->getStatusCode() !== 419 || $request->expectsJson()) {
+            return null;
+        }
+
+        return redirect()->back()->with('error', 'Halaman sudah kedaluwarsa. Silakan coba lagi.');
+    });
+
     $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, Request $request) {
         // Hanya 404 (halaman/data tidak ada) dan 405 (metode salah).
         if (! in_array($e->getStatusCode(), [404, 405], true)) {
