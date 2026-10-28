@@ -149,6 +149,66 @@ class PushNotificationTest extends TestCase
         $this->assertSame([], MobileToken::pushTokensFor($user));
     }
 
+    public function test_push_body_hides_details_but_the_inbox_keeps_them(): void
+    {
+        Http::fake([ExpoPushChannel::ENDPOINT => Http::response(['data' => [['status' => 'ok']]])]);
+        [$user, $token] = $this->pegawaiWithToken('pegawai1');
+        $this->withToken($token)->putJson('/api/mobile/push-token', ['token' => self::EXPO_TOKEN])->assertOk();
+        $secret = new WorkflowNotification('correction.reviewed', 'Koreksi absensi ditolak', 'Alasan: catatan pribadi penilai.');
+
+        $user->notify($secret);
+
+        Http::assertSent(fn ($request) => $request[0]['title'] === 'Koreksi absensi ditolak'
+            && ! str_contains($request[0]['body'], 'catatan pribadi'));
+        $this->assertStringContainsString('catatan pribadi', $user->notifications()->firstOrFail()->data['body']);
+
+        config(['notifications.push_details' => true]);
+        $this->assertStringContainsString('catatan pribadi', $secret->toExpoPush($user)['body']);
+
+        // Pengingat jam absen tidak memuat data pribadi: tampil apa adanya.
+        $this->assertStringContainsString('15:00', WorkflowNotification::checkOutReminder('15:00')->toExpoPush($user)['body']);
+    }
+
+    // ---- masa berlaku token ----------------------------------------------------------------------
+
+    public function test_token_expiry_slides_while_in_use_but_respects_the_absolute_cap(): void
+    {
+        Carbon::setTestNow('2026-10-21 00:00:00');
+        [, $token] = $this->pegawaiWithToken('pegawai1');
+        $row = MobileToken::firstOrFail();
+        $this->assertTrue($row->expires_at->equalTo(Carbon::parse('2026-11-20 00:00:00')));
+
+        // 20 hari kemudian dipakai lagi: masa berlaku bergeser 30 hari dari sekarang.
+        Carbon::setTestNow('2026-11-10 00:00:00');
+        $this->withToken($token)->getJson('/api/mobile/me')->assertOk();
+        $this->assertTrue($row->fresh()->expires_at->equalTo(Carbon::parse('2026-12-10 00:00:00')));
+
+        // Dipakai lagi beberapa menit kemudian: tidak ditulis ulang (perpanjangan < 1 hari).
+        $before = $row->fresh()->expires_at->toDateTimeString();
+        Carbon::setTestNow('2026-11-10 00:05:00');
+        $this->withToken($token)->getJson('/api/mobile/me')->assertOk();
+        $this->assertSame($before, $row->fresh()->expires_at->toDateTimeString());
+
+        // Mendekati batas mutlak 180 hari sejak login: tidak melewati batas itu.
+        Carbon::setTestNow('2027-04-10 00:00:00'); // 171 hari sejak login
+        $row->forceFill(['expires_at' => Carbon::parse('2027-04-12 00:00:00')])->save();
+        $this->withToken($token)->getJson('/api/mobile/me')->assertOk();
+        $this->assertTrue($row->fresh()->expires_at->equalTo($row->created_at->copy()->addDays(180)));
+    }
+
+    public function test_token_expiry_does_not_slide_when_disabled(): void
+    {
+        config(['mobile.sliding_expiry' => false]);
+        Carbon::setTestNow('2026-10-21 00:00:00');
+        [, $token] = $this->pegawaiWithToken('pegawai1');
+        $expires = MobileToken::firstOrFail()->expires_at->toDateTimeString();
+
+        Carbon::setTestNow('2026-11-10 00:00:00');
+        $this->withToken($token)->getJson('/api/mobile/me')->assertOk();
+
+        $this->assertSame($expires, MobileToken::firstOrFail()->expires_at->toDateTimeString());
+    }
+
     // ---- pengingat jam absen --------------------------------------------------------------------
 
     public function test_check_in_reminder_is_sent_once_before_work_starts(): void

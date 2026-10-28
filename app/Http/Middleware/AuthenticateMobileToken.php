@@ -55,12 +55,34 @@ class AuthenticateMobileToken
 
         // Cukup catat pemakaian terakhir sekali per menit agar tidak menulis di setiap permintaan.
         if (! $token->last_used_at || $token->last_used_at->lt(now()->subMinute())) {
-            $token->forceFill(['last_used_at' => now()])->saveQuietly();
+            $token->forceFill(['last_used_at' => now()] + $this->slidingExpiry($token))->saveQuietly();
         }
 
         $request->setUserResolver(fn () => $account);
         $request->attributes->set('mobile_token', $token);
 
         return $next($request);
+    }
+
+    /**
+     * Perpanjang masa berlaku token selama perangkat masih dipakai, supaya pengingat/push tidak berhenti diam-diam
+     * tepat saat pegawai masih aktif. Batas mutlak (mobile.token_max_days sejak login) tetap berlaku, dan
+     * penulisan hanya terjadi bila perpanjangannya berarti (lebih dari sehari), bukan di setiap permintaan.
+     *
+     * @return array{expires_at?: \Carbon\Carbon}
+     */
+    private function slidingExpiry(MobileToken $token): array
+    {
+        if (! config('mobile.sliding_expiry') || ! $token->expires_at) {
+            return [];
+        }
+
+        $next = now()->addDays(max(1, (int) config('mobile.token_ttl_days', 30)));
+        $cap = $token->created_at?->copy()->addDays(max(1, (int) config('mobile.token_max_days', 180)));
+        if ($cap && $next->gt($cap)) {
+            $next = $cap;
+        }
+
+        return $next->gt($token->expires_at->copy()->addDay()) ? ['expires_at' => $next] : [];
     }
 }

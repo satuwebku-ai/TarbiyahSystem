@@ -16,6 +16,9 @@ return [
 
     // Notifikasi push ke aplikasi mobile (lewat layanan push Expo). Hanya terkirim ke perangkat yang sudah mendaftarkan token.
     'push' => env('NOTIFY_PUSH', true),
+    // false (disarankan): push hanya memuat judul dan kalimat umum; rincian dibaca di dalam aplikasi.
+    // true: isi lengkap ikut dikirim (tampil di layar kunci dan melewati server Expo).
+    'push_details' => env('NOTIFY_PUSH_DETAILS', false),
     // Opsional: Access Token Expo bila "Enhanced Security for Push Notifications" diaktifkan di akun Expo.
     'expo_access_token' => env('EXPO_ACCESS_TOKEN'),
 

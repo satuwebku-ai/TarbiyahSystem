@@ -84,7 +84,16 @@ jadi `POST /logout` atau token kedaluwarsa otomatis menghentikan push ke perangk
   mulai `NOTIFY_CHECKIN_LEAD_MINUTES` (bawaan 15) menit sebelum jam masuk sampai `NOTIFY_REMINDER_WINDOW_MINUTES` (60) menit sesudahnya bila belum ada catatan hari itu,
   dan "Waktunya absen pulang" saat jam pulang bagi yang belum absen pulang. Mengikuti kebijakan, hari kerja, hari libur, dan zona waktu unit pegawai;
   hanya untuk pegawai yang punya perangkat terdaftar; satu kali per hari (kunci cache). Penjadwal wajib berjalan (`schedule:run` lewat cron) begitu juga antrean (`queue:work`).
+- Isi push tampil di layar kunci dan melewati server Expo, jadi push hanya memuat judul dan kalimat umum ("Ketuk untuk melihat rincian di aplikasi.");
+  rincian (nama kegiatan, catatan/alasan penilai) hanya ada di kotak masuk. Pengingat jam absen tidak memuat data pribadi dan tampil apa adanya.
+  `NOTIFY_PUSH_DETAILS=true` mengirim isi lengkap.
 - Opsional `EXPO_ACCESS_TOKEN` bila akun Expo mengaktifkan keamanan lanjutan untuk push.
+
+## Masa berlaku token
+
+Token berlaku `MOBILE_TOKEN_TTL_DAYS` (30) hari sejak pemakaian terakhir: selama aplikasi dipakai, masa berlakunya bergeser otomatis (`MOBILE_SLIDING_EXPIRY=true`;
+ditulis paling sering sekali sehari). Batas mutlak `MOBILE_TOKEN_MAX_DAYS` (180) hari sejak login tetap berlaku, setelah itu pengguna wajib masuk ulang.
+Push berhenti bila token kedaluwarsa, jadi geseran ini mencegah pengingat berhenti diam-diam pada pegawai yang masih aktif.
 
 ## Galat
 

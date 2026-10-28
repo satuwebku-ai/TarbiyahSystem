@@ -66,12 +66,28 @@ class WorkflowNotification extends Notification implements ShouldQueue
         return $channels;
     }
 
+    /** Pengingat jam absen tidak memuat data pribadi; isinya boleh tampil apa adanya di layar kunci. */
+    private const PUSH_PLAIN_KINDS = ['reminder.checkin', 'reminder.checkout-time'];
+
+    /**
+     * Isi push ikut tampil di layar kunci dan melewati server Expo, jadi rincian (nama kegiatan, catatan/alasan penilai)
+     * tidak dikirim. Rincian lengkap tetap ada di kotak masuk aplikasi. NOTIFY_PUSH_DETAILS=true mengirim isi lengkap.
+     */
+    private function pushBody(): string
+    {
+        if (config('notifications.push_details') || in_array($this->kind, self::PUSH_PLAIN_KINDS, true)) {
+            return Str::limit($this->body, 180);
+        }
+
+        return 'Ketuk untuk melihat rincian di aplikasi.';
+    }
+
     /** Muatan pesan push Expo. "data" dipakai aplikasi untuk membuka layar yang tepat saat notifikasi diketuk. */
     public function toExpoPush(object $notifiable): array
     {
         return [
             'title' => $this->title,
-            'body' => Str::limit($this->body, 180),
+            'body' => $this->pushBody(),
             'sound' => 'default',
             'priority' => 'high',
             'channelId' => 'default',
