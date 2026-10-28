@@ -192,6 +192,60 @@ class MobileApiTest extends TestCase
         $this->withToken($token)->getJson('/api/mobile/employee/attendance/history?month=bukan')->assertStatus(422);
     }
 
+    public function test_pegawai_gets_monthly_summary_with_the_same_rules_as_the_web_recap(): void
+    {
+        $this->pegawai();
+        $token = $this->login('pegawai1');
+        $employee = Employee::firstOrFail();
+
+        // Rabu 21 Okt 2026 (hari ini). Hari kerja Senin-Sabtu: 1-20 Okt = 17 hari kerja (Minggu 4, 11, 18 tidak dihitung).
+        $make = fn (string $date, string $status, array $extra = []) => AttendanceRecord::create([
+            'employee_id' => $employee->id, 'organizational_unit_id' => $this->unit->id,
+            'attendance_date' => $date, 'status' => $status, ...$extra,
+        ]);
+        $make('2026-10-01', 'present', ['check_in_at' => '2026-10-01 00:00:00', 'work_minutes' => 450]);
+        $make('2026-10-02', 'late', ['check_in_at' => '2026-10-02 00:20:00', 'late_minutes' => 20, 'work_minutes' => 400]);
+        $make('2026-10-03', 'permit');
+        $make('2026-10-05', 'sick');
+        $make('2026-10-06', 'present', ['check_in_at' => '2026-10-06 00:00:00', 'work_minutes' => 450]);
+
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/summary')
+            ->assertOk()
+            ->assertJsonPath('month', '2026-10')
+            ->assertJsonPath('monthLabel', 'Oktober 2026')
+            ->assertJsonPath('total', 17)
+            ->assertJsonPath('percentage', 17.6) // (2 hadir + 1 terlambat) / 17
+            ->assertJsonPath('counts.present', 2)
+            ->assertJsonPath('counts.late', 1)
+            ->assertJsonPath('counts.permit', 1)
+            ->assertJsonPath('counts.sick', 1)
+            ->assertJsonPath('counts.leave', 0)
+            ->assertJsonPath('counts.absent', 12) // hari kerja lewat tanpa catatan = tidak hadir otomatis
+            ->assertJsonPath('workMinutes', 1300)
+            ->assertJsonPath('lateMinutes', 20);
+
+        // Bulan lalu tanpa catatan: 26 hari kerja, semuanya tidak hadir otomatis.
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/summary?month=2026-09')
+            ->assertOk()->assertJsonPath('month', '2026-09')->assertJsonPath('monthLabel', 'September 2026')
+            ->assertJsonPath('total', 26)->assertJsonPath('counts.absent', 26)->assertJsonPath('counts.present', 0);
+
+        // Bulan depan dibatasi ke bulan berjalan; format salah ditolak.
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/summary?month=2026-12')
+            ->assertOk()->assertJsonPath('month', '2026-10');
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/summary?month=bukan')->assertStatus(422);
+    }
+
+    public function test_summary_needs_a_pegawai_token(): void
+    {
+        $this->getJson('/api/mobile/employee/attendance/summary')->assertUnauthorized();
+
+        StudentAccount::create(['name' => 'Siswa Satu', 'nis' => '12345', 'password' => self::PASSWORD, 'is_active' => true]);
+        $token = $this->postJson('/api/mobile/login', ['role' => 'pelajar', 'identifier' => '12345', 'password' => self::PASSWORD])
+            ->assertOk()->json('token');
+        $this->withToken($token)->getJson('/api/mobile/employee/attendance/summary')
+            ->assertForbidden()->assertJsonPath('code', 'wrong_role');
+    }
+
     public function test_photo_is_required_by_policy_and_accepted_as_base64(): void
     {
         $this->policy->update(['require_photo' => true]);

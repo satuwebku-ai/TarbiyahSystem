@@ -1,6 +1,6 @@
 # API Aplikasi Mobile (tarbiyah-mobile)
 
-Aplikasi Expo `tarbiyah-mobile` memakai API JSON ini untuk login, presensi pegawai, rekap kehadiran pelajar,
+Aplikasi Expo `tarbiyah-mobile` memakai API JSON ini untuk login, presensi pegawai, rekap kehadiran pegawai dan pelajar,
 dan notifikasi. Kodenya: `routes/mobile.php`, `app/Http/Controllers/Api/Mobile/*`, token di tabel `mobile_tokens`.
 
 ## Pasang
@@ -49,6 +49,7 @@ jadi kuncian di web berlaku di mobile dan sebaliknya). CAPTCHA tidak dipakai di 
 | DELETE | `/push-token` | semua | Berhenti menerima push di perangkat ini (keluar dari akun juga otomatis menghentikannya) |
 | GET | `/employee/attendance/dashboard` | pegawai | Status hari ini, kebijakan (`needsPhoto`, `needsLocation`, `workStart`, `workEnd`, `lateToleranceMinutes`, `checkinDeadline`, `checkinClosed`, `geofenceRadiusM`; hanya untuk ditampilkan, titik koordinat tidak dikirim), `canCheckIn`, `canCheckOut`, `recent` |
 | GET | `/employee/attendance/history?month=YYYY-MM` | pegawai | `{month, records[]}` |
+| GET | `/employee/attendance/summary?month=YYYY-MM` | pegawai | Rekap bulanan: `{month, monthLabel, total, percentage, counts{present,late,permit,sick,leave,absent}, workMinutes, lateMinutes}` |
 | POST | `/employee/attendance/check-in` | pegawai | `{latitude?, longitude?, accuracy?, photoBase64?}` -> `{message, record}` |
 | POST | `/employee/attendance/check-out` | pegawai | sama dengan check-in |
 | GET | `/employee/attendance/corrections` | pegawai | 30 pengajuan terbaru |
@@ -62,6 +63,19 @@ Presensi memakai `AttendanceService` yang sama dengan portal web, sehingga kebij
 hari libur, pencocokan wajah, dan jendela koreksi otomatis berlaku. Catatan dari mobile bertanda `source = mobile`
 (tampil "Aplikasi mobile" di presensi harian admin). Foto dikirim sebagai base64 (JPEG/PNG/WebP, maks 2 MB);
 jenis file dibaca dari isinya, bukan dari klaim klien. Waktu dikembalikan ISO 8601 dengan offset zona waktu unit.
+
+## Rekap bulanan pegawai
+
+`GET /employee/attendance/summary?month=YYYY-MM` memakai `AttendanceRecapService` yang sama dengan laporan bulanan di web, sehingga angkanya
+selalu sama dengan yang dilihat admin. `month` kosong atau melewati bulan ini = bulan ini.
+
+- `counts`: jumlah hari per status. `absent` mencakup tidak hadir otomatis (hari kerja yang sudah lewat tanpa catatan).
+  Hari libur, hari bukan kerja, hari ini yang belum ada catatan, dan hari yang akan datang tidak dihitung.
+- `total`: jumlah semua hari yang terhitung (jumlah `counts`).
+- `percentage`: `(present + late) / total * 100`, satu desimal; `null` bila `total` = 0 (sama dengan rumus rekap pelajar).
+- `workMinutes` / `lateMinutes`: akumulasi menit kerja dan menit terlambat pada bulan itu.
+
+Rekap pelajar (`/student/attendance`) sudah mengirim `counts` per status (`present`, `late`, `permit`, `sick`, `absent`) selain `total` dan `percentage`.
 
 ## Pendaftaran 2FA dari aplikasi
 

@@ -10,6 +10,7 @@ use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\OrganizationalUnit;
 use App\Services\AttendancePolicyResolver;
+use App\Services\AttendanceRecapService;
 use App\Services\AttendanceService;
 use App\Services\PegawaiPortalAccess;
 use Carbon\Carbon;
@@ -28,6 +29,11 @@ class EmployeeAttendanceController extends Controller
     private const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 
     private const PHOTO_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+
+    private const MONTHS = [
+        1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni',
+        7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+    ];
 
     public function dashboard(Request $request, PegawaiPortalAccess $access, AttendancePolicyResolver $resolver): JsonResponse
     {
@@ -68,16 +74,8 @@ class EmployeeAttendanceController extends Controller
     public function history(Request $request, PegawaiPortalAccess $access, AttendancePolicyResolver $resolver): JsonResponse
     {
         $employee = $this->employee($request, $access);
-        $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
-
+        $month = $this->resolveMonth($request, $resolver->timezoneForEmployee($employee));
         $tz = $resolver->timezoneForEmployee($employee);
-        $thisMonth = AttendanceClock::today($tz)->startOfMonth();
-        $month = $request->filled('month')
-            ? Carbon::createFromFormat('Y-m-d', $request->string('month').'-01', $tz)->startOfDay()
-            : $thisMonth;
-        if ($month->gt($thisMonth)) {
-            $month = $thisMonth;
-        }
 
         $records = AttendanceRecord::query()
             ->where('employee_id', $employee->id)
@@ -88,6 +86,33 @@ class EmployeeAttendanceController extends Controller
         return response()->json([
             'month' => $month->format('Y-m'),
             'records' => $records->map(fn ($r) => $this->recordPayload($r, $tz))->values(),
+        ]);
+    }
+
+    /**
+     * Rekap bulanan pegawai yang sedang login. Memakai AttendanceRecapService yang sama dengan laporan bulanan web,
+     * jadi "tidak hadir otomatis" (hari kerja lewat tanpa catatan), hari libur, dan hari bukan kerja dihitung sama.
+     * `percentage` = (hadir + terlambat) / semua hari yang terhitung; null bila belum ada hari terhitung.
+     */
+    public function summary(Request $request, PegawaiPortalAccess $access, AttendancePolicyResolver $resolver, AttendanceRecapService $recap): JsonResponse
+    {
+        $employee = $this->employee($request, $access);
+        $month = $this->resolveMonth($request, $resolver->timezoneForEmployee($employee));
+
+        $result = $recap->build($month->copy()->startOfMonth(), $month->copy()->endOfMonth()->startOfDay(), collect([$employee]));
+        $row = $result['rows']->first();
+
+        $counts = $row['counts'] ?? array_fill_keys(AttendanceRecapService::COUNT_KEYS, 0);
+        $total = array_sum($counts);
+
+        return response()->json([
+            'month' => $month->format('Y-m'),
+            'monthLabel' => self::MONTHS[$month->month].' '.$month->year,
+            'total' => $total,
+            'percentage' => $total > 0 ? round(($counts['present'] + $counts['late']) / $total * 100, 1) : null,
+            'counts' => $counts,
+            'workMinutes' => (int) ($row['work_minutes'] ?? 0),
+            'lateMinutes' => (int) ($row['late_minutes'] ?? 0),
         ]);
     }
 
@@ -235,6 +260,19 @@ class EmployeeAttendanceController extends Controller
             'reviewNote' => $c->review_note,
             'createdAt' => $c->created_at?->toIso8601String(),
         ];
+    }
+
+    /** Bulan dari ?month=YYYY-MM (awal bulan, zona waktu unit); kosong atau melewati bulan ini = bulan ini. */
+    private function resolveMonth(Request $request, string $tz): Carbon
+    {
+        $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
+
+        $thisMonth = AttendanceClock::today($tz)->startOfMonth();
+        $month = $request->filled('month')
+            ? Carbon::createFromFormat('Y-m-d', $request->string('month').'-01', $tz)->startOfDay()
+            : $thisMonth;
+
+        return $month->gt($thisMonth) ? $thisMonth : $month;
     }
 
     private function employee(Request $request, PegawaiPortalAccess $access): Employee

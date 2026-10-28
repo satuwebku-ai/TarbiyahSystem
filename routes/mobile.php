@@ -40,6 +40,7 @@ Route::middleware(['mobile.auth', 'throttle:120,1'])->group(function () {
     Route::middleware('mobile.auth:pegawai')->prefix('employee/attendance')->name('employee.attendance.')->group(function () {
         Route::get('dashboard', [EmployeeAttendanceController::class, 'dashboard'])->name('dashboard');
         Route::get('history', [EmployeeAttendanceController::class, 'history'])->name('history');
+        Route::get('summary', [EmployeeAttendanceController::class, 'summary'])->name('summary');
         Route::get('corrections', [EmployeeAttendanceController::class, 'corrections'])->name('corrections.index');
         Route::post('corrections', [EmployeeAttendanceController::class, 'storeCorrection'])->middleware('throttle:10,1')->name('corrections.store');
         Route::post('check-in', [EmployeeAttendanceController::class, 'checkIn'])->middleware('throttle:20,1')->name('check-in');
