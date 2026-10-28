@@ -8,14 +8,14 @@ Berlaku untuk **akun pengelola** (panel) dan **akun pegawai** (portal pegawai). 
 | Apa | Di mana |
 |---|---|
 | Kebijakan (aktif / wajib per jenis akun), ringkasan pemakaian, reset 2FA akun | Pengaturan Admin > Keamanan > **Autentikasi 2 Faktor** (izin `security.view` / `security.update`) |
-| Mendaftar / mematikan / kode pemulihan | **Profil Saya** (admin) atau **Profil & Keamanan** (pegawai), oleh pemilik akun |
+| Mendaftar / mematikan / kode pemulihan | **Profil Saya** (admin), **Profil & Keamanan** (pegawai), atau **Profil > Keamanan akun** di aplikasi mobile (pegawai), oleh pemilik akun |
 | Riwayat | Riwayat Keamanan: `*.two_factor_enabled`, `*.two_factor_failed`, `security.two_factor_reset`, dst. |
 
 Alur login: username + kata sandi benar -> halaman kode 6 digit -> sesi dibuat. Sebelum kode benar tidak ada sesi
 dan tidak ada cookie "ingat saya". Kode salah dibatasi sesuai "Maksimum percobaan login" di Kebijakan Keamanan;
 satu kode tidak bisa dipakai dua kali; tantangan berlaku 5 menit. Kode pemulihan (8, sekali pakai) disimpan sebagai hash.
 
-Mewajibkan 2FA: akun yang belum mendaftar diarahkan ke Profil sampai selesai. Sistem menolak mewajibkan 2FA admin
+Mewajibkan 2FA: akun yang belum mendaftar diarahkan ke Profil sampai selesai (di aplikasi mobile: layar pendaftaran dari halaman login, karena akun itu belum bisa mendapat token). Sistem menolak mewajibkan 2FA admin
 bila akun yang sedang menyimpan kebijakan itu belum ber-2FA (mencegah mengunci diri sendiri).
 
 Ponsel hilang dan kode pemulihan habis: admin dengan izin `security.update` mereset di halaman 2FA

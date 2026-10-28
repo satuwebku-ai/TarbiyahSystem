@@ -396,6 +396,64 @@ class MobileApiTest extends TestCase
             ->assertStatus(429)->assertJsonPath('code', 'too_many_attempts');
     }
 
+    // ---- pengaturan 2FA dari menu Profil (sudah masuk) --------------------------------------------
+
+    public function test_logged_in_pegawai_can_enable_recover_and_disable_2fa_from_settings(): void
+    {
+        $user = $this->pegawai();
+        AdminSecuritySetting::query()->update(['two_factor_enabled' => true, 'two_factor_required_pegawai' => false]);
+        AdminSecuritySetting::clearCache();
+        $token = $this->login('pegawai1');
+
+        $this->withToken($token)->getJson('/api/mobile/security/two-factor')
+            ->assertOk()->assertJsonPath('enabled', false)->assertJsonPath('featureEnabled', true);
+
+        $secret = $this->withToken($token)->postJson('/api/mobile/security/two-factor/setup')
+            ->assertOk()->assertJsonStructure(['secret', 'otpauthUri'])->json('secret');
+
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/confirm', ['code' => '000000'])
+            ->assertStatus(422)->assertJsonPath('code', 'two_factor_invalid');
+        $this->assertFalse($user->fresh()->hasTwoFactorEnabled());
+
+        $confirm = $this->withToken($token)->postJson('/api/mobile/security/two-factor/confirm', ['code' => $this->totpCode($secret)])
+            ->assertOk()->assertJsonPath('enabled', true);
+        $this->assertCount(8, $confirm->json('recoveryCodes'));
+        $this->assertTrue(AdminAuditLog::where('event', 'pegawai.two_factor_enabled')->exists());
+
+        // Tindakan sensitif butuh kata sandi.
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/recovery-codes', ['password' => 'salah'])
+            ->assertStatus(422)->assertJsonPath('code', 'invalid_password');
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/recovery-codes', ['password' => self::PASSWORD])
+            ->assertOk()->assertJsonCount(8, 'recoveryCodes');
+
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/disable', ['password' => 'salah'])
+            ->assertStatus(422);
+        $this->assertTrue($user->fresh()->hasTwoFactorEnabled());
+
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/disable', ['password' => self::PASSWORD])
+            ->assertOk()->assertJsonPath('enabled', false);
+        $this->assertFalse($user->fresh()->hasTwoFactorEnabled());
+        $this->assertTrue(AdminAuditLog::where('event', 'pegawai.two_factor_disabled')->exists());
+    }
+
+    public function test_required_2fa_cannot_be_disabled_from_settings_and_settings_need_a_token(): void
+    {
+        $this->pegawai();
+        AdminSecuritySetting::query()->update(['two_factor_enabled' => true, 'two_factor_required_pegawai' => false]);
+        AdminSecuritySetting::clearCache();
+        $token = $this->login('pegawai1');
+
+        $secret = $this->withToken($token)->postJson('/api/mobile/security/two-factor/setup')->json('secret');
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/confirm', ['code' => $this->totpCode($secret)])->assertOk();
+
+        $this->requireTwoFactor();
+        $this->withToken($token)->postJson('/api/mobile/security/two-factor/disable', ['password' => self::PASSWORD])
+            ->assertStatus(403)->assertJsonPath('code', 'two_factor_required');
+
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/mobile/security/two-factor')->assertStatus(401);
+    }
+
     // ---- bantu ----------------------------------------------------------------------------------
 
     private function requireTwoFactor(): void

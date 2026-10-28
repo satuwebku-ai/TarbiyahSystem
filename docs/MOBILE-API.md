@@ -36,6 +36,11 @@ jadi kuncian di web berlaku di mobile dan sebaliknya). CAPTCHA tidak dipakai di 
 | POST | `/login` | - | `{role, identifier, password, twoFactorCode?, deviceName?}` -> `{token, expiresAt, user}` |
 | POST | `/two-factor/setup` | - | Pegawai: `{identifier, password}` -> `{secret, otpauthUri, issuer, account}`. Membuat rahasia 2FA baru (belum aktif) |
 | POST | `/two-factor/confirm` | - | Pegawai: `{identifier, password, code, deviceName?}` -> `{token, expiresAt, user, recoveryCodes}`. Mengaktifkan 2FA dan langsung masuk |
+| GET | `/security/two-factor` | pegawai | Status 2FA akun: `{featureEnabled, enabled, pending, required, recoveryCodesRemaining}` |
+| POST | `/security/two-factor/setup` | pegawai | Membuat rahasia 2FA baru (belum aktif) -> `{secret, otpauthUri, issuer, account}` |
+| POST | `/security/two-factor/confirm` | pegawai | `{code}` -> 2FA aktif + `{recoveryCodes, ...status}` (sekali saja) |
+| POST | `/security/two-factor/recovery-codes` | pegawai | `{password}` -> kode pemulihan baru, yang lama tidak berlaku |
+| POST | `/security/two-factor/disable` | pegawai | `{password}` -> mematikan 2FA (ditolak `403 two_factor_required` bila kebijakan mewajibkan) |
 | GET | `/me` | semua | `{id, name, role, identifier}` |
 | POST | `/logout` | semua | Mencabut token ini |
 | GET | `/notifications` | semua | 50 terbaru: `[{id, kind, title, body, icon, readAt, createdAt}]` |
@@ -72,6 +77,15 @@ Aturan: hanya pegawai; fitur 2FA harus aktif di Kebijakan Keamanan (`403 two_fac
 aktif ditolak (`422 two_factor_already_enabled`, rahasia lama tidak tertimpa; mematikan atau mengganti 2FA tetap lewat portal web);
 `confirm` tanpa `setup` -> `422 two_factor_setup_missing`. Batas percobaan: kata sandi memakai kunci yang sama dengan login,
 tebakan kode memakai kunci yang sama dengan tantangan 2FA saat login. Peristiwa dicatat di audit log (`pegawai.two_factor_enabled`, channel `mobile`).
+
+## Pengaturan 2FA dari menu Profil
+
+Pegawai yang sudah masuk mengelola 2FA dari **Profil > Keamanan akun** di aplikasi (layar `security`), memakai token Bearer
+dan aturan yang sama dengan Profil & Keamanan di portal web: setup -> konfirmasi kode 6 digit -> kode pemulihan tampil sekali.
+Membuat kode pemulihan baru dan mematikan 2FA meminta kata sandi lagi (salah berulang dikunci, `429 too_many_attempts`).
+Peristiwa tercatat di audit log dengan channel `mobile`: `pegawai.two_factor_enabled`, `pegawai.two_factor_recovery_regenerated`,
+`pegawai.two_factor_disabled`, `pegawai.security_password_failed`. Jalur pendaftaran dari layar login (di atas) tetap ada,
+hanya untuk akun yang WAJIB 2FA dan belum punya token.
 
 ## Notifikasi push
 
