@@ -9,9 +9,13 @@ use App\Models\ActivityReport;
 use App\Models\Admin;
 use App\Models\AttendanceCorrection;
 use App\Models\AttendanceRecord;
+use App\Models\Employee;
+use App\Models\MobileToken;
+use App\Models\User;
 use App\Models\WorkActivity;
 use App\Models\WorkProgram;
 use App\Notifications\WorkflowNotification;
+use Carbon\Carbon;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Cache;
 
@@ -127,6 +131,76 @@ class ReminderService
 
                 $user->notify(WorkflowNotification::missingCheckout($record));
                 $sent++;
+            });
+
+        return $sent;
+    }
+
+    /**
+     * Pengingat jam absen lewat push: "waktunya absen masuk" sekitar jam masuk dan "waktunya absen pulang"
+     * saat jam kerja berakhir. Hanya untuk pegawai yang punya perangkat mobile terdaftar (agar lonceng web
+     * pegawai lain tidak penuh). Jam, hari kerja, dan hari libur mengikuti kebijakan absensi unit pegawai.
+     */
+    public function attendanceTimes(): int
+    {
+        $lead = max(0, (int) config('notifications.checkin_reminder_lead_minutes'));
+        $window = max(1, (int) config('notifications.reminder_window_minutes'));
+
+        $userIds = MobileToken::query()
+            ->where('tokenable_type', (new User)->getMorphClass())
+            ->whereNotNull('push_token')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->distinct()->pluck('tokenable_id');
+        if ($userIds->isEmpty()) {
+            return 0;
+        }
+
+        $resolver = app(AttendancePolicyResolver::class);
+        $sent = 0;
+
+        Employee::query()->with('user')
+            ->whereIn('user_id', $userIds)->where('status', EmployeeStatus::Active->value)
+            ->each(function (Employee $employee) use ($resolver, $lead, $window, &$sent) {
+                $user = $employee->user;
+                if (! $user?->is_active) {
+                    return;
+                }
+
+                $unitId = $resolver->unitFor($employee, AttendanceClock::now());
+                $policy = $unitId ? $resolver->policyForUnit($unitId) : null;
+                if (! $policy || ! $policy->work_start || ! $policy->work_end) {
+                    return;
+                }
+
+                $tz = $resolver->timezoneFor($policy);
+                $now = AttendanceClock::now($tz);
+                $date = $now->toDateString();
+                if (! $policy->isWorkDay($now->isoWeekday()) || $resolver->holidayFor($unitId, $date)) {
+                    return;
+                }
+
+                $start = Carbon::parse("{$date} {$policy->work_start}", $tz);
+                $end = Carbon::parse("{$date} {$policy->work_end}", $tz);
+                $record = AttendanceRecord::query()
+                    ->where('employee_id', $employee->id)->where('attendance_date', $date)->first();
+
+                if (! $record) {
+                    // Belum ada catatan apa pun hari ini (izin/sakit/cuti juga berupa catatan, jadi tidak diingatkan).
+                    if ($now->between($start->copy()->subMinutes($lead), $start->copy()->addMinutes($window))
+                        && Cache::add("reminder:checkin:{$employee->id}:{$date}", 1, now()->addDay())) {
+                        $user->notify(WorkflowNotification::checkInReminder($start->format('H:i'), $now->gte($start)));
+                        $sent++;
+                    }
+
+                    return;
+                }
+
+                if ($record->check_in_at && ! $record->check_out_at
+                    && $now->between($end, $end->copy()->addMinutes($window))
+                    && Cache::add("reminder:checkout-time:{$employee->id}:{$date}", 1, now()->addDay())) {
+                    $user->notify(WorkflowNotification::checkOutReminder($end->format('H:i')));
+                    $sent++;
+                }
             });
 
         return $sent;

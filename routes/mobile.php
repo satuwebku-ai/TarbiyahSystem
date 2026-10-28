@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Mobile\AuthController;
 use App\Http\Controllers\Api\Mobile\EmployeeAttendanceController;
 use App\Http\Controllers\Api\Mobile\NotificationController;
+use App\Http\Controllers\Api\Mobile\PushTokenController;
 use App\Http\Controllers\Api\Mobile\StudentAttendanceController;
 use App\Http\Controllers\Api\Mobile\TwoFactorEnrollmentController;
 use Illuminate\Support\Facades\Route;
@@ -22,6 +23,9 @@ Route::middleware(['mobile.auth', 'throttle:120,1'])->group(function () {
 
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('notifications/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+
+    Route::put('push-token', [PushTokenController::class, 'store'])->name('push-token.store');
+    Route::delete('push-token', [PushTokenController::class, 'destroy'])->name('push-token.destroy');
 
     Route::middleware('mobile.auth:pegawai')->prefix('employee/attendance')->name('employee.attendance.')->group(function () {
         Route::get('dashboard', [EmployeeAttendanceController::class, 'dashboard'])->name('dashboard');

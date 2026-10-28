@@ -7,6 +7,8 @@ use App\Models\ActivityReport;
 use App\Models\Admin;
 use App\Models\AttendanceCorrection;
 use App\Models\AttendanceRecord;
+use App\Models\MobileToken;
+use App\Notifications\Channels\ExpoPushChannel;
 use App\Models\WorkActivity;
 use App\Models\WorkProgram;
 use Illuminate\Bus\Queueable;
@@ -47,14 +49,34 @@ class WorkflowNotification extends Notification implements ShouldQueue
         return [60, 300];
     }
 
+    /** Pengingat jam absen harian: cukup di aplikasi dan push, tidak perlu email setiap hari. */
+    private const NO_MAIL_KINDS = ['reminder.checkin', 'reminder.checkout-time'];
+
     public function via(object $notifiable): array
     {
         $channels = ['database'];
-        if (config('notifications.mail') && filled($notifiable->email ?? null)) {
+        if (config('notifications.mail') && filled($notifiable->email ?? null) && ! in_array($this->kind, self::NO_MAIL_KINDS, true)) {
             $channels[] = 'mail';
+        }
+        // Push hanya untuk akun pegawai/pelajar yang punya perangkat terdaftar (pengurus/admin tidak).
+        if (config('notifications.push') && $notifiable instanceof \Illuminate\Database\Eloquent\Model && MobileToken::pushTokensFor($notifiable) !== []) {
+            $channels[] = ExpoPushChannel::class;
         }
 
         return $channels;
+    }
+
+    /** Muatan pesan push Expo. "data" dipakai aplikasi untuk membuka layar yang tepat saat notifikasi diketuk. */
+    public function toExpoPush(object $notifiable): array
+    {
+        return [
+            'title' => $this->title,
+            'body' => Str::limit($this->body, 180),
+            'sound' => 'default',
+            'priority' => 'high',
+            'channelId' => 'default',
+            'data' => ['kind' => $this->kind, 'screen' => 'notifications'],
+        ];
     }
 
     public function toArray(object $notifiable): array
@@ -240,6 +262,30 @@ class WorkflowNotification extends Notification implements ShouldQueue
             'Anda belum absen pulang',
             'Absen pulang tanggal '.$record->attendance_date->format('d M Y').' belum tercatat. Ajukan koreksi bila Anda lupa absen.',
             'pegawai.dashboard', [], 'clock',
+        );
+    }
+
+    /** Pengingat jam absen masuk (push harian bagi pegawai yang belum absen). */
+    public static function checkInReminder(string $startTime, bool $started): self
+    {
+        return new self(
+            'reminder.checkin',
+            $started ? 'Anda belum absen masuk' : 'Waktunya absen masuk',
+            $started
+                ? "Jam kerja dimulai pukul {$startTime}. Segera absen masuk."
+                : "Jam kerja dimulai pukul {$startTime}. Jangan lupa absen masuk.",
+            null, [], 'clock',
+        );
+    }
+
+    /** Pengingat jam absen pulang untuk pegawai yang sudah absen masuk tetapi belum absen pulang. */
+    public static function checkOutReminder(string $endTime): self
+    {
+        return new self(
+            'reminder.checkout-time',
+            'Waktunya absen pulang',
+            "Jam kerja berakhir pukul {$endTime}. Jangan lupa absen pulang.",
+            null, [], 'clock',
         );
     }
 

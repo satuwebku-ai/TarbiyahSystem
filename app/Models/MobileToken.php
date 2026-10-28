@@ -12,9 +12,9 @@ use Illuminate\Support\Str;
  */
 class MobileToken extends Model
 {
-    protected $fillable = ['tokenable_type', 'tokenable_id', 'name', 'token_hash', 'last_used_at', 'expires_at'];
+    protected $fillable = ['tokenable_type', 'tokenable_id', 'name', 'token_hash', 'push_token', 'push_platform', 'last_used_at', 'expires_at'];
 
-    protected $hidden = ['token_hash'];
+    protected $hidden = ['token_hash', 'push_token'];
 
     protected function casts(): array
     {
@@ -70,5 +70,36 @@ class MobileToken extends Model
             ->where('token_hash', hash('sha256', $plain))
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->first();
+    }
+
+    /**
+     * Token push Expo milik semua perangkat aktif sebuah akun (pegawai/pelajar). Kosong untuk akun lain.
+     *
+     * @return list<string>
+     */
+    public static function pushTokensFor(Model $account): array
+    {
+        if (static::roleOf($account) === null) {
+            return [];
+        }
+
+        return static::query()
+            ->where('tokenable_type', $account->getMorphClass())
+            ->where('tokenable_id', $account->getKey())
+            ->whereNotNull('push_token')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->pluck('push_token')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** Lepas token push dari semua sesi (perangkat tidak lagi terdaftar di Expo atau berpindah akun). */
+    public static function forgetPushToken(string $pushToken, ?int $exceptId = null): void
+    {
+        static::query()
+            ->where('push_token', $pushToken)
+            ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
+            ->update(['push_token' => null, 'push_platform' => null]);
     }
 }

@@ -40,6 +40,8 @@ jadi kuncian di web berlaku di mobile dan sebaliknya). CAPTCHA tidak dipakai di 
 | POST | `/logout` | semua | Mencabut token ini |
 | GET | `/notifications` | semua | 50 terbaru: `[{id, kind, title, body, icon, readAt, createdAt}]` |
 | POST | `/notifications/read` | semua | `{ids?: string[]}`; tanpa `ids` = semua dibaca |
+| PUT | `/push-token` | semua | `{token, platform?}` (`token` = Expo push token, `platform` = `android`\|`ios`). Mendaftarkan perangkat ini untuk notifikasi push -> `{registered: true}` |
+| DELETE | `/push-token` | semua | Berhenti menerima push di perangkat ini (keluar dari akun juga otomatis menghentikannya) |
 | GET | `/employee/attendance/dashboard` | pegawai | Status hari ini, kebijakan (`needsPhoto`, `needsLocation`), `canCheckIn`, `canCheckOut`, `recent` |
 | GET | `/employee/attendance/history?month=YYYY-MM` | pegawai | `{month, records[]}` |
 | POST | `/employee/attendance/check-in` | pegawai | `{latitude?, longitude?, accuracy?, photoBase64?}` -> `{message, record}` |
@@ -70,6 +72,19 @@ Aturan: hanya pegawai; fitur 2FA harus aktif di Kebijakan Keamanan (`403 two_fac
 aktif ditolak (`422 two_factor_already_enabled`, rahasia lama tidak tertimpa; mematikan atau mengganti 2FA tetap lewat portal web);
 `confirm` tanpa `setup` -> `422 two_factor_setup_missing`. Batas percobaan: kata sandi memakai kunci yang sama dengan login,
 tebakan kode memakai kunci yang sama dengan tantangan 2FA saat login. Peristiwa dicatat di audit log (`pegawai.two_factor_enabled`, channel `mobile`).
+
+## Notifikasi push
+
+Aplikasi mendaftarkan token push Expo lewat `PUT /push-token` setelah login. Token melekat pada sesi (`mobile_tokens.push_token`),
+jadi `POST /logout` atau token kedaluwarsa otomatis menghentikan push ke perangkat itu, dan satu perangkat hanya milik satu sesi.
+
+- Setiap `WorkflowNotification` untuk pegawai/pelajar yang punya perangkat terdaftar dikirim juga lewat `App\Notifications\Channels\ExpoPushChannel`
+  (selain kotak masuk). Token yang ditolak Expo (`DeviceNotRegistered`) dilepas otomatis. Matikan dengan `NOTIFY_PUSH=false`.
+- Pengingat jam absen: `php artisan reminders:attendance-time` (dijadwalkan tiap 5 menit di `routes/console.php`). Mengirim "Waktunya absen masuk"
+  mulai `NOTIFY_CHECKIN_LEAD_MINUTES` (bawaan 15) menit sebelum jam masuk sampai `NOTIFY_REMINDER_WINDOW_MINUTES` (60) menit sesudahnya bila belum ada catatan hari itu,
+  dan "Waktunya absen pulang" saat jam pulang bagi yang belum absen pulang. Mengikuti kebijakan, hari kerja, hari libur, dan zona waktu unit pegawai;
+  hanya untuk pegawai yang punya perangkat terdaftar; satu kali per hari (kunci cache). Penjadwal wajib berjalan (`schedule:run` lewat cron) begitu juga antrean (`queue:work`).
+- Opsional `EXPO_ACCESS_TOKEN` bila akun Expo mengaktifkan keamanan lanjutan untuk push.
 
 ## Galat
 
