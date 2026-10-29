@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\EmployeeFaceController;
 use App\Http\Controllers\Admin\EmployeeStatusController;
 use App\Http\Controllers\Admin\FingerprintDeviceController;
 use App\Http\Controllers\Admin\FingerprintLogController;
+use App\Http\Controllers\Admin\FingerprintNodeConnectionController;
 use App\Http\Controllers\Admin\FingerprintPinController;
 use App\Http\Controllers\Admin\FirstAdminSetupController;
 use App\Http\Controllers\Admin\NotificationController;
@@ -240,6 +241,12 @@ Route::middleware(['auth', 'admin.session', 'two-factor.enrolled'])->group(funct
                 Route::get('schools/{school}', [StudentAttendanceSettingController::class, 'editSchool'])->name('school.edit');
                 Route::put('schools/{school}', [StudentAttendanceSettingController::class, 'updateSchool'])->name('school.update');
                 Route::delete('schools/{school}', [StudentAttendanceSettingController::class, 'resetSchool'])->name('school.reset');
+
+                // Koneksi aplikasi Node fingerprint (username, password, token) per sekolah.
+                Route::get('schools/{school}/node', [FingerprintNodeConnectionController::class, 'edit'])->name('node.edit');
+                Route::put('schools/{school}/node', [FingerprintNodeConnectionController::class, 'update'])->name('node.update');
+                Route::post('schools/{school}/node/token', [FingerprintNodeConnectionController::class, 'regenerateToken'])->name('node.token');
+                Route::delete('schools/{school}/node', [FingerprintNodeConnectionController::class, 'destroy'])->name('node.destroy');
             });
 
         Route::prefix('fingerprint')->name('fingerprint.')->group(function () {

@@ -22,6 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
             // Mesin fingerprint (push ADMS): tanpa sesi/CSRF, di luar grup web.
             Route::group([], base_path('routes/iclock.php'));
 
+            // API aplikasi Node fingerprint di sekolah: Basic auth + X-Node-Token, tanpa sesi/CSRF.
+            Route::middleware(['api', 'mobile.json'])->prefix('api/fingerprint-node')->name('fingerprint-node.')
+                ->group(base_path('routes/fingerprint-node.php'));
+
             // API aplikasi mobile: token Bearer, tanpa sesi/CSRF, dapat dipanggil dari host mana pun.
             Route::middleware(['api', 'mobile.json'])->prefix('api/mobile')->name('mobile.')
                 ->group(base_path('routes/mobile.php'));
@@ -79,6 +83,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'two-factor.enrolled' => EnsureTwoFactorEnrolled::class,
             'mobile.auth' => AuthenticateMobileToken::class,
             'mobile.json' => ForceJsonResponse::class,
+            'fingerprint.node' => \App\Http\Middleware\AuthenticateFingerprintNode::class,
         ]);
 
         // Belum login -> halaman login sesuai subdomain.
@@ -119,17 +124,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ? $e->getMessage()
                 : 'Terjadi kesalahan di server (pukul '.now()->format('H:i:s').'). Hubungi admin bila berulang.',
         ], 500);
-    });
-
-    // 419 (token CSRF/sesi kedaluwarsa: halaman login dibiarkan terbuka lama, halaman lama dari cache/tombol Kembali,
-    // atau cookie sesi hilang) -> kembali ke halaman asal dengan pesan, bukan halaman buntu "Halaman Kedaluwarsa".
-    // Isian form sengaja tidak dikembalikan agar kata sandi/kode tidak ikut tersimpan di sesi.
-    $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, Request $request) {
-        if ($e->getStatusCode() !== 419 || $request->expectsJson()) {
-            return null;
-        }
-
-        return redirect()->back()->with('error', 'Halaman sudah kedaluwarsa. Silakan coba lagi.');
     });
 
     $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, Request $request) {

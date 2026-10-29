@@ -44,3 +44,27 @@ Mesin ADMS hanya mengenali dirinya lewat nomor seri (SN), yang tidak rahasia. La
   dari `config/trustedproxy.php`, jadi tetap berlaku setelah `php artisan config:cache`. Pembatasan IP di atas hanya
   bisa dipercaya bila IP ini benar.
 - Mesin umumnya hanya mendukung HTTP (port 80), jadi data tidak terenkripsi di jaringan: pakai pembatasan IP atau VPN.
+
+## Koneksi aplikasi Node fingerprint (per sekolah)
+Untuk sekolah yang memakai aplikasi Node (bukan push ADMS langsung dari mesin).
+
+1. Buka **Absensi Siswa → Pengaturan → Koneksi Node Fingerprint → Buat koneksi** untuk sekolah tersebut.
+2. Isi **username** dan **password** (min. 10 karakter; boleh "Buat acak"), opsional **Batasi IP**. Setelah disimpan,
+   **token** ditampilkan **sekali** — salin. Hilang? klik **Token baru** (token lama langsung tidak berlaku).
+3. Di aplikasi Node isi: `SERVER_URL=https://<domain>/api/fingerprint-node`, `NODE_USERNAME`, `NODE_PASSWORD`, `NODE_TOKEN`.
+
+Setiap request memakai **Basic auth** (`username:password`) **dan** header `X-Node-Token`; ketiganya harus cocok.
+Password disimpan sebagai hash, token hanya hash SHA-256. Kegagalan login dibatasi 20x/menit per IP.
+
+```bash
+# uji koneksi
+curl -u sd-satu:PASSWORD -H "X-Node-Token: tbn_xxx" -X POST https://<domain>/api/fingerprint-node/connect
+
+# kirim ketukan (waktu = jam dinding mesin, format Y-m-d H:i:s)
+curl -u sd-satu:PASSWORD -H "X-Node-Token: tbn_xxx" -H "Content-Type: application/json" \
+  -X POST https://<domain>/api/fingerprint-node/punches \
+  -d '{"device_sn":"MESIN1","punches":[{"pin":"101","time":"2026-10-29 06:55:00","status":0,"verify":1}]}'
+```
+Respons: `{"ok":true,"received":1,"created":1}`. Kirim ulang ketukan yang sama aman (duplikat diabaikan).
+Tiap `device_sn` otomatis menjadi mesin di menu **Mesin Fingerprint** (nama "Node <SN>"), dan aturan pencatatan di atas berlaku sama.
+Status: 401 kredensial salah, 403 koneksi/mesin nonaktif atau IP tidak diizinkan, 413 data terlalu besar, 422 format salah, 429 terlalu banyak percobaan gagal.

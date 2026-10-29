@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
+use App\Models\FingerprintNodeConnection;
 use App\Models\School;
 use App\Models\StudentAttendanceSetting;
 use App\Services\OrganizationAccess;
@@ -31,6 +32,8 @@ class StudentAttendanceSettingController extends Controller
             'canEditGeneral' => $organization->visibleUnitIds($admin) === null,
             'schools' => $schools,
             'custom' => $custom,
+            'nodes' => FingerprintNodeConnection::query()->whereIn('school_id', $schools->pluck('id'))->get()->keyBy('school_id'),
+            'nodeUrl' => url('/api/fingerprint-node'),
         ]);
     }
 
